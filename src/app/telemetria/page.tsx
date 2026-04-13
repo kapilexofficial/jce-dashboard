@@ -15,6 +15,7 @@ export default async function TelemetriaPage() {
     const tel = p.ListTelemetry || {};
     const odo = tel[TELEMETRY_IDS.ODOMETER] || 0;
     const fuelTotal = tel[TELEMETRY_IDS.FUEL_TOTAL] || 0;
+    const kmlApi = tel[TELEMETRY_IDS.FUEL_CONSUMPTION_KML] || 0;
     const speed = tel[TELEMETRY_IDS.SPEED] || 0;
     const rpm = tel[TELEMETRY_IDS.RPM] || 0;
     const engineTemp = tel[TELEMETRY_IDS.ENGINE_TEMP] || 0;
@@ -31,7 +32,7 @@ export default async function TelemetriaPage() {
       lng: p.Longitude,
       odometer: odo,
       fuelTotal,
-      kml: fuelTotal > 100 ? odo / fuelTotal : 0,
+      kml: kmlApi,
       speed,
       rpm,
       engineTemp,

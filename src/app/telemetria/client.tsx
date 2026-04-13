@@ -56,7 +56,7 @@ export function TelemetriaClient({ vehicles }: { vehicles: VehicleTelemetry[] })
 
   const totalKm = displayVehicles.reduce((s, v) => s + v.odometer, 0);
   const totalLiters = displayVehicles.reduce((s, v) => s + v.fuelTotal, 0);
-  const avgKml = totalLiters > 0 ? totalKm / totalLiters : 0;
+  const avgKml = displayVehicles.length > 0 ? displayVehicles.reduce((s, v) => s + v.kml, 0) / displayVehicles.length : 0;
 
   // Ranking by km/l
   const ranking = useMemo(() => [...displayVehicles].sort((a, b) => b.kml - a.kml), [displayVehicles]);
