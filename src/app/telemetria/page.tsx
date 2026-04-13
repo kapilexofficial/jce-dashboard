@@ -1,14 +1,38 @@
 export const dynamic = "force-dynamic";
 
 import { getAllFleetPositionsGrouped, TELEMETRY_IDS } from "@/lib/elithium-api";
+import { getVehicles } from "@/lib/esl-api";
 import { TelemetriaClient, type VehicleHistory, type PositionPoint } from "./client";
 
+function inferBrand(model: string): string {
+  const m = model.toUpperCase().trim();
+  if (!m) return "N/I";
+  if (/^(FH|FM|VM|NH)/.test(m)) return "VOLVO";
+  if (/^(XF|CF|LF)/.test(m)) return "DAF";
+  if (/^R\d/.test(m) || /^T\d/.test(m) || /^G\d/.test(m) || /^P\d/.test(m)) return "SCANIA";
+  if (/^(TGX|TGS|TGM)/.test(m)) return "MAN";
+  if (/^(AXOR|ATEGO|ACTROS|ACCELO|ATRON)/.test(m)) return "M.BENZ";
+  if (/^(CONSTELLATION|DELIVERY|METEOR|WORKER|VW)/.test(m)) return "VOLKSWAGEN";
+  if (/^(CARGO|F\d)/.test(m)) return "FORD";
+  return "OUTROS";
+}
+
 export default async function TelemetriaPage() {
-  let grouped: Record<string, Awaited<ReturnType<typeof getAllFleetPositionsGrouped>>[string]> = {};
+  let grouped: Awaited<ReturnType<typeof getAllFleetPositionsGrouped>> = {};
+  let eslVehicles: Awaited<ReturnType<typeof getVehicles>> = [];
+
   try {
-    grouped = await getAllFleetPositionsGrouped();
+    [grouped, eslVehicles] = await Promise.all([
+      getAllFleetPositionsGrouped().catch(() => ({})),
+      getVehicles().catch(() => []),
+    ]);
   } catch (error) {
-    console.error("Erro Elithium:", error);
+    console.error("Erro Elithium/ESL:", error);
+  }
+
+  const modelByPlate = new Map<string, string>();
+  for (const v of eslVehicles) {
+    modelByPlate.set(v.license_plate, v.model || "");
   }
 
   const vehicles: VehicleHistory[] = Object.entries(grouped).map(([plate, positions]) => {
@@ -31,10 +55,12 @@ export default async function TelemetriaPage() {
     });
 
     const latest = positions[positions.length - 1];
+    const model = modelByPlate.get(plate) || "";
     return {
       plate,
       driver: latest.Driver || "Sem motorista",
-      model: latest.TrackedUnit || "",
+      model,
+      brand: inferBrand(model),
       points,
     };
   });
