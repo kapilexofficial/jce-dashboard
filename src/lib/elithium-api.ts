@@ -64,26 +64,32 @@ export async function getPositionByPlate(plate: string) {
 }
 
 export async function getAllFleetPositions(): Promise<PositionRecord[]> {
-  // Fetch by letter prefix to get all vehicles
+  const grouped = await getAllFleetPositionsGrouped();
+  // Return only the latest position per plate (backwards compat)
+  return Object.values(grouped).map((positions) => positions[positions.length - 1]);
+}
+
+export async function getAllFleetPositionsGrouped(): Promise<Record<string, PositionRecord[]>> {
   const prefixes = "BCDEFGHIJKLMNOPQRSTUVWXYZ".split("");
-  const results: PositionRecord[] = [];
-  const seen = new Set<string>();
+  const grouped: Record<string, PositionRecord[]> = {};
 
   for (const prefix of prefixes) {
     try {
       const data = await getPositionsByPlatePrefix(prefix);
       for (const p of data) {
-        if (!seen.has(p.Plate)) {
-          seen.add(p.Plate);
-          results.push(p);
-        }
+        if (!grouped[p.Plate]) grouped[p.Plate] = [];
+        grouped[p.Plate].push(p);
       }
     } catch {
-      // Some prefixes may have no results
+      // ignore prefixes without results
     }
   }
 
-  return results;
+  for (const plate of Object.keys(grouped)) {
+    grouped[plate].sort((a, b) => new Date(a.EventDate).getTime() - new Date(b.EventDate).getTime());
+  }
+
+  return grouped;
 }
 
 export async function getTelemetryTypes() {
