@@ -121,7 +121,7 @@ export function DreClient({
   }, [margins, dateStart, dateEnd]);
 
   const vehicle = selectedPlate
-    ? activeVehicles.find((v) => v.license_plate === selectedPlate)
+    ? mergedVehicles.find((v) => v.license_plate === selectedPlate)
     : null;
 
   // Build DRE from filtered data
