@@ -5,6 +5,7 @@ import {
   Gauge, Fuel, Truck, Thermometer, Battery, Route, TrendingUp, Activity,
 } from "lucide-react";
 import { Bar, BarChart, CartesianGrid, Cell, Pie, PieChart, XAxis, YAxis, Label } from "recharts";
+import { BrandLogo } from "@/components/brand-logo";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
@@ -38,6 +39,7 @@ export interface VehicleHistory {
   driver: string;
   model: string;
   brand: string;
+  traction: string;
   points: PositionPoint[];
 }
 
@@ -66,6 +68,7 @@ interface VehicleMetrics {
   driver: string;
   model: string;
   brand: string;
+  traction: string;
   pointsInPeriod: number;
   kmRodados: number;
   litros: number;
@@ -101,6 +104,7 @@ function computeMetrics(v: VehicleHistory, startTs: number, endTs: number): Vehi
     driver: v.driver,
     model: v.model,
     brand: v.brand,
+    traction: v.traction,
     pointsInPeriod: inRange.length,
     kmRodados,
     litros,
@@ -206,6 +210,47 @@ export function TelemetriaClient({ vehicles }: { vehicles: VehicleHistory[] }) {
 
   const totalKmFleet = byBrand.reduce((s, b) => s + b.km, 0);
 
+  const byTraction = useMemo(() => {
+    const tractions = ["6x2", "6x4", "4x2"];
+    return tractions.map((tr) => {
+      const models: Record<string, { model: string; brand: string; km: number; litros: number; vehicles: number }> = {};
+      for (const m of displayMetrics.filter((m) => m.traction === tr)) {
+        const key = m.model || "—";
+        if (!models[key]) models[key] = { model: key, brand: m.brand || "N/I", km: 0, litros: 0, vehicles: 0 };
+        models[key].km += m.kmRodados;
+        models[key].litros += m.litros;
+        models[key].vehicles += 1;
+      }
+      const modelList = Object.values(models)
+        .map((mo) => ({ ...mo, kml: mo.litros > 0 ? mo.km / mo.litros : 0 }))
+        .filter((mo) => mo.kml > 0)
+        .sort((a, b) => b.kml - a.kml);
+      const totalKmTr = modelList.reduce((s, m) => s + m.km, 0);
+      const totalLitrosTr = modelList.reduce((s, m) => s + m.litros, 0);
+      const avg = totalLitrosTr > 0 ? totalKmTr / totalLitrosTr : 0;
+      return { traction: tr, models: modelList, avg };
+    }).filter((t) => t.models.length > 0);
+  }, [displayMetrics]);
+
+  const tractionMeta: Record<string, { label: string; desc: string; color: string; ring: string; text: string }> = {
+    "6x2": { label: "6×2", desc: "Mais econômico - longas distâncias", color: "from-indigo-500/10 to-indigo-500/5", ring: "border-indigo-500/30", text: "text-indigo-400" },
+    "6x4": { label: "6×4", desc: "Maior tração - cargas pesadas", color: "from-emerald-500/10 to-emerald-500/5", ring: "border-emerald-500/30", text: "text-emerald-400" },
+    "4x2": { label: "4×2", desc: "Urbano / leve", color: "from-amber-500/10 to-amber-500/5", ring: "border-amber-500/30", text: "text-amber-400" },
+  };
+
+  const totalModels = byTraction.reduce((s, t) => s + t.models.length, 0);
+  const totalKmByTraction = byTraction.reduce((s, t) => s + t.models.reduce((a, m) => a + m.km, 0), 0);
+  const totalLitrosByTraction = byTraction.reduce((s, t) => s + t.models.reduce((a, m) => a + m.litros, 0), 0);
+  const avgKmlOverall = totalLitrosByTraction > 0 ? totalKmByTraction / totalLitrosByTraction : 0;
+
+  const maxKmlForBars = Math.max(...byTraction.flatMap((t) => t.models.map((m) => m.kml)), 3.0);
+
+  function kmlColor(kml: number) {
+    if (kml >= 2.2) return "bg-emerald-400/80";
+    if (kml >= 1.7) return "bg-amber-400/80";
+    return "bg-red-400/80";
+  }
+
   const chartConfig = {
     count: { label: "Veículos" },
     kmRodados: { label: "Km", color: "oklch(0.68 0.19 265)" },
@@ -309,28 +354,20 @@ export function TelemetriaClient({ vehicles }: { vehicles: VehicleHistory[] }) {
         </Card>
       </div>
 
-      {byBrand.length > 0 && (
+      {byTraction.length > 0 && (
         <div className="space-y-3">
-          <p className="text-[10px] uppercase tracking-widest text-primary font-bold">Desempenho por Marca</p>
-          <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
-            {byBrand.map((b, i) => {
-              const pctKm = totalKmFleet > 0 ? (b.km / totalKmFleet) * 100 : 0;
+          <p className="text-[10px] uppercase tracking-widest text-primary font-bold">Comparativo por Tração</p>
+          <div className="grid gap-4 md:grid-cols-3">
+            {byTraction.map((t) => {
+              const meta = tractionMeta[t.traction] || tractionMeta["6x2"];
               return (
-                <Card key={b.brand} className="overflow-hidden relative">
-                  <div className="absolute inset-x-0 top-0 h-1" style={{ background: COLORS[i % COLORS.length] }} />
-                  <CardContent className="pt-5 pb-5 px-5 space-y-2">
-                    <div className="flex items-center justify-between">
-                      <p className="text-sm font-bold">{b.brand}</p>
-                      <Badge variant="outline" className="text-[10px]">{b.vehicles} veíc.</Badge>
-                    </div>
-                    <div>
-                      <div className="text-2xl font-extrabold">{fmt(b.kml)} <span className="text-xs text-muted-foreground font-normal">km/l</span></div>
-                    </div>
-                    <div className="space-y-1 text-xs text-muted-foreground pt-1 border-t border-border">
-                      <div className="flex justify-between"><span>Km rodados</span><span className="font-mono text-foreground">{fmtInt(b.km)}</span></div>
-                      <div className="flex justify-between"><span>Litros</span><span className="font-mono text-foreground">{fmtInt(b.litros)}</span></div>
-                      <div className="flex justify-between"><span>% da frota</span><span className="font-mono text-foreground">{fmt(pctKm, 1)}%</span></div>
-                    </div>
+                <Card key={t.traction} className={`overflow-hidden relative bg-gradient-to-br ${meta.color} ${meta.ring}`}>
+                  <div className="absolute inset-x-0 top-0 h-1" style={{ background: `linear-gradient(to right, ${COLORS[0]}, ${COLORS[1]})` }} />
+                  <CardContent className="pt-8 pb-6 text-center space-y-2">
+                    <p className={`text-5xl font-extrabold ${meta.text}`}>{meta.label}</p>
+                    <p className="text-4xl font-extrabold"><span className={t.avg >= 2.2 ? "text-emerald-400" : t.avg >= 1.7 ? "text-amber-400" : "text-red-400"}>{fmt(t.avg)}</span> <span className="text-sm text-muted-foreground font-normal">km/l</span></p>
+                    <p className="text-xs text-muted-foreground">{t.models.length} modelos</p>
+                    <p className="text-[10px] text-muted-foreground">{meta.desc}</p>
                   </CardContent>
                 </Card>
               );
@@ -339,39 +376,63 @@ export function TelemetriaClient({ vehicles }: { vehicles: VehicleHistory[] }) {
         </div>
       )}
 
-      {byModel.length > 0 && (
+      {byTraction.length > 0 && (
         <Card>
           <CardHeader>
-            <CardTitle className="flex items-center gap-2"><Truck className="h-5 w-5 text-primary" /> Desempenho por Modelo</CardTitle>
-            <CardDescription>Agregado do período — ordenado por km rodados</CardDescription>
+            <CardTitle className="flex items-center gap-2"><Truck className="h-5 w-5 text-primary" /> Ranking por Modelo (agrupado por tração)</CardTitle>
+            <CardDescription>Km/l calculado via delta do odômetro e combustível no período</CardDescription>
           </CardHeader>
-          <CardContent>
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Marca</TableHead>
-                  <TableHead>Modelo</TableHead>
-                  <TableHead className="text-right">Veículos</TableHead>
-                  <TableHead className="text-right">Km</TableHead>
-                  <TableHead className="text-right">Litros</TableHead>
-                  <TableHead className="text-right">Km/l</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {byModel.map((m) => (
-                  <TableRow key={m.model}>
-                    <TableCell className="text-xs text-muted-foreground">{m.brand}</TableCell>
-                    <TableCell className="font-medium">{m.model}</TableCell>
-                    <TableCell className="text-right font-mono">{m.vehicles}</TableCell>
-                    <TableCell className="text-right font-mono">{fmtInt(m.km)}</TableCell>
-                    <TableCell className="text-right font-mono">{fmt(m.litros, 1)}</TableCell>
-                    <TableCell className="text-right font-mono">
-                      <span className={m.kml >= 2.5 ? "text-emerald-400 font-semibold" : m.kml >= 1.5 ? "" : "text-amber-400"}>{fmt(m.kml)}</span>
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
+          <CardContent className="space-y-8">
+            {byTraction.map((t) => {
+              const meta = tractionMeta[t.traction] || tractionMeta["6x2"];
+              return (
+                <div key={t.traction} className="space-y-2">
+                  <div className="flex items-center justify-between border-b border-border pb-2">
+                    <div className="flex items-center gap-3">
+                      <Badge variant="outline" className={`${meta.text} border-current text-sm font-bold px-3 py-0.5`}>{meta.label}</Badge>
+                      <span className="text-xs text-muted-foreground">{t.models.length} modelos</span>
+                    </div>
+                    <span className="text-xs text-muted-foreground">Média: <span className="font-semibold text-foreground">{fmt(t.avg)} km/l</span></span>
+                  </div>
+                  <div className="space-y-0.5">
+                    {t.models.map((m, idx) => {
+                      const isBest = idx === 0 && t.models.length > 1;
+                      const isWorst = idx === t.models.length - 1 && t.models.length > 1;
+                      const pct = Math.min(100, (m.kml / maxKmlForBars) * 100);
+                      return (
+                        <div key={m.model} className={`flex items-center gap-3 px-2 py-2 rounded ${isBest ? "bg-emerald-500/5" : isWorst ? "bg-red-500/5" : ""}`}>
+                          <div className="flex items-center gap-2 min-w-[140px]">
+                            <BrandLogo brand={m.brand} size={24} />
+                            <div className="leading-tight">
+                              <p className="text-[10px] text-muted-foreground uppercase">{m.brand}</p>
+                              <p className="text-sm font-bold font-mono">{m.model}</p>
+                            </div>
+                          </div>
+                          <div className="flex-1 h-5 bg-muted/30 rounded overflow-hidden relative">
+                            <div className={`h-full ${kmlColor(m.kml)} transition-all`} style={{ width: `${pct}%` }} />
+                          </div>
+                          <div className="flex items-center gap-2 min-w-[110px] justify-end">
+                            <span className={`text-base font-extrabold ${m.kml >= 2.2 ? "text-emerald-400" : m.kml >= 1.7 ? "text-amber-400" : "text-red-400"}`}>
+                              {fmt(m.kml)}
+                            </span>
+                            <span className="text-[10px] text-muted-foreground">km/l</span>
+                            {isBest && <Badge variant="outline" className="text-[9px] text-emerald-400 border-emerald-400/40 ml-1">MELHOR</Badge>}
+                            {isWorst && <Badge variant="outline" className="text-[9px] text-red-400 border-red-400/40 ml-1">PIOR</Badge>}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              );
+            })}
+            <div className="flex items-center justify-between pt-4 border-t border-border">
+              <div className="flex items-center gap-2">
+                <span className="text-sm font-semibold">Total Geral</span>
+                <Badge variant="outline" className="text-[10px]">{totalModels} modelos</Badge>
+              </div>
+              <span className="text-2xl font-extrabold text-primary">{fmt(avgKmlOverall)} <span className="text-xs text-muted-foreground font-normal">km/l</span></span>
+            </div>
           </CardContent>
         </Card>
       )}

@@ -17,6 +17,13 @@ function inferBrand(model: string): string {
   return "OUTROS";
 }
 
+function inferTraction(model: string): string {
+  const m = model.toUpperCase().replace(/\s+/g, "");
+  const match = m.match(/(\d)X(\d)/);
+  if (match) return `${match[1]}x${match[2]}`;
+  return "—";
+}
+
 export default async function TelemetriaPage() {
   let grouped: Awaited<ReturnType<typeof getAllFleetPositionsGrouped>> = {};
   let eslVehicles: Awaited<ReturnType<typeof getVehicles>> = [];
@@ -61,6 +68,7 @@ export default async function TelemetriaPage() {
       driver: latest.Driver || "Sem motorista",
       model,
       brand: inferBrand(model),
+      traction: inferTraction(model),
       points,
     };
   });
