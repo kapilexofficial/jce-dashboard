@@ -355,29 +355,74 @@ export function TelemetriaClient({ vehicles }: { vehicles: VehicleHistory[] }) {
       </div>
 
       {byBrand.length > 0 && (
-        <div className="space-y-3">
-          <p className="text-[10px] uppercase tracking-widest text-primary font-bold">Desempenho por Marca</p>
-          <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
-            {byBrand.map((b, i) => {
+        <div className="space-y-4">
+          <div className="flex items-end justify-between">
+            <div>
+              <h3 className="text-lg font-bold tracking-tight">Desempenho por Marca</h3>
+              <p className="text-xs text-muted-foreground mt-0.5">
+                Top {Math.min(byBrand.length, 6)} marcas da frota — agregado do período
+              </p>
+            </div>
+            <Badge variant="outline" className="text-xs">
+              {fmtInt(totalKmFleet)} km no total
+            </Badge>
+          </div>
+          <div className="grid gap-5 md:grid-cols-2 lg:grid-cols-3">
+            {byBrand.slice(0, 6).map((b, i) => {
               const pctKm = totalKmFleet > 0 ? (b.km / totalKmFleet) * 100 : 0;
+              const kmlGood = b.kml >= 2.5;
+              const kmlWarn = b.kml >= 1.5 && b.kml < 2.5;
               return (
-                <Card key={b.brand} className="overflow-hidden relative">
-                  <div className="absolute inset-x-0 top-0 h-1" style={{ background: COLORS[i % COLORS.length] }} />
-                  <CardContent className="pt-5 pb-5 px-5 space-y-2">
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-2">
-                        <BrandLogo brand={b.brand} size={20} />
-                        <p className="text-sm font-bold">{b.brand}</p>
+                <Card
+                  key={b.brand}
+                  className="overflow-hidden relative hover:shadow-lg transition-shadow"
+                >
+                  <div
+                    className="absolute inset-x-0 top-0 h-1.5"
+                    style={{ background: COLORS[i % COLORS.length] }}
+                  />
+                  <CardContent className="pt-8 pb-6 px-6">
+                    <div className="flex items-center gap-4 mb-5">
+                      <div className="flex h-20 w-20 items-center justify-center rounded-2xl bg-muted/40 ring-1 ring-border shrink-0">
+                        <BrandLogo brand={b.brand} size={64} />
                       </div>
-                      <Badge variant="outline" className="text-[10px]">{b.vehicles} veíc.</Badge>
+                      <div className="min-w-0 flex-1">
+                        <h4 className="text-xl font-extrabold truncate">{b.brand}</h4>
+                        <p className="text-xs text-muted-foreground mt-0.5">
+                          {b.vehicles} veículo{b.vehicles !== 1 ? "s" : ""} ·{" "}
+                          {fmt(pctKm, 1)}% da frota
+                        </p>
+                      </div>
                     </div>
-                    <div>
-                      <div className="text-2xl font-extrabold">{fmt(b.kml)} <span className="text-xs text-muted-foreground font-normal">km/l</span></div>
+
+                    <div className="flex items-baseline gap-2 mb-4">
+                      <span
+                        className={`text-4xl font-extrabold ${
+                          kmlGood
+                            ? "text-emerald-400"
+                            : kmlWarn
+                            ? "text-foreground"
+                            : "text-amber-400"
+                        }`}
+                      >
+                        {fmt(b.kml)}
+                      </span>
+                      <span className="text-sm text-muted-foreground font-medium">km/l</span>
                     </div>
-                    <div className="space-y-1 text-xs text-muted-foreground pt-1 border-t border-border">
-                      <div className="flex justify-between"><span>Km rodados</span><span className="font-mono text-foreground">{fmtInt(b.km)}</span></div>
-                      <div className="flex justify-between"><span>Litros</span><span className="font-mono text-foreground">{fmtInt(b.litros)}</span></div>
-                      <div className="flex justify-between"><span>% da frota</span><span className="font-mono text-foreground">{fmt(pctKm, 1)}%</span></div>
+
+                    <div className="grid grid-cols-2 gap-3 pt-3 border-t border-border">
+                      <div>
+                        <p className="text-[10px] uppercase tracking-wide text-muted-foreground font-semibold">
+                          Km rodados
+                        </p>
+                        <p className="text-sm font-bold font-mono mt-0.5">{fmtInt(b.km)}</p>
+                      </div>
+                      <div>
+                        <p className="text-[10px] uppercase tracking-wide text-muted-foreground font-semibold">
+                          Litros
+                        </p>
+                        <p className="text-sm font-bold font-mono mt-0.5">{fmtInt(b.litros)}</p>
+                      </div>
                     </div>
                   </CardContent>
                 </Card>
