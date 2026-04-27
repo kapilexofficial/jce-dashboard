@@ -22,7 +22,7 @@ async function request<T>(
       "Content-Type": "application/json",
       ...options?.headers,
     },
-    next: { revalidate: 60 },
+    cache: "no-store",
   });
 
   if (!res.ok) {
@@ -32,7 +32,11 @@ async function request<T>(
   return res.json();
 }
 
-async function graphql<T>(query: string, variables?: Record<string, unknown>): Promise<T> {
+async function graphql<T>(
+  query: string,
+  variables?: Record<string, unknown>,
+  cacheOpts?: { revalidate: number; tags: string[] }
+): Promise<T> {
   const res = await fetch(GRAPHQL_URL, {
     method: "POST",
     headers: {
@@ -40,7 +44,9 @@ async function graphql<T>(query: string, variables?: Record<string, unknown>): P
       "Content-Type": "application/json",
     },
     body: JSON.stringify({ query, variables }),
-    next: { revalidate: 60 },
+    ...(cacheOpts
+      ? { next: { revalidate: cacheOpts.revalidate, tags: cacheOpts.tags } }
+      : { cache: "no-store" as RequestCache }),
   });
 
   if (!res.ok) {
@@ -91,7 +97,7 @@ export async function getAllFreightMargins(
 ): Promise<FreightMargin[]> {
   const all: FreightMargin[] = [];
   let nextId: number | undefined;
-  for (let i = 0; i < 10; i++) {
+  for (let i = 0; i < 100; i++) {
     const res = await getFreightMargins(serviceAtStart, serviceAtEnd, nextId);
     all.push(...res.data);
     if (!res.paging.next_id || res.data.length === 0) break;
@@ -133,6 +139,28 @@ export async function getVehicles() {
 // --- Ocorrências ---
 export async function getInvoiceOccurrences(params?: Record<string, string>) {
   return request<OccurrencesResponse>("/api/invoice_occurrences", { params });
+}
+
+export async function getAllInvoiceOccurrences(
+  baseParams?: Record<string, string>,
+  options?: { stopBefore?: string; maxPages?: number }
+): Promise<OccurrenceRest[]> {
+  const all: OccurrenceRest[] = [];
+  let nextId: number | undefined;
+  const maxPages = options?.maxPages ?? 200;
+  for (let i = 0; i < maxPages; i++) {
+    const params: Record<string, string> = { ...(baseParams || {}) };
+    if (nextId) params.start = String(nextId);
+    const res = await request<OccurrencesResponse>("/api/invoice_occurrences", { params });
+    all.push(...res.data);
+    if (!res.paging.next_id || res.data.length === 0) break;
+    if (options?.stopBefore) {
+      const last = res.data[res.data.length - 1];
+      if (last && last.occurrence_at < options.stopBefore) break;
+    }
+    nextId = res.paging.next_id;
+  }
+  return all;
 }
 
 // --- Comprovante de Entrega ---
@@ -463,7 +491,8 @@ export async function queryFreightsWithUser(params: Record<string, unknown>, fir
 export async function queryFreights(
   params: Record<string, unknown>,
   first = 50,
-  after?: string
+  after?: string,
+  cacheOpts?: { revalidate: number; tags: string[] }
 ) {
   return graphql<{ freight: FreightConnection }>(
     `query freight($params: FreightInput!, $first: Int, $after: String) {
@@ -491,7 +520,8 @@ export async function queryFreights(
         }
       }
     }`,
-    { params, first, after }
+    { params, first, after },
+    cacheOpts
   );
 }
 
@@ -499,14 +529,62 @@ export async function queryFreights(
  * Fetches all freights via cursor pagination. ESL caps each page at 20,
  * so we loop until hasNextPage is false or maxPages is reached.
  */
+export interface FreightAnalysisNode extends Omit<FreightNode, "sender" | "recipient"> {
+  finishedAt: string | null;
+  draftEmissionAt: string | null;
+  createdAt: string | null;
+  updatedAt: string | null;
+  deliveryPredictionHour: string | null;
+  sender: { id: string; name: string; nickname: string | null; cnpj: string | null };
+  recipient: { id: string; name: string; nickname: string | null; cnpj: string | null };
+}
+
+export async function queryAllFreightsForAnalysis(
+  maxPages = 50,
+  cacheOpts?: { revalidate: number; tags: string[] }
+): Promise<FreightAnalysisNode[]> {
+  const all: FreightAnalysisNode[] = [];
+  let cursor: string | undefined;
+  for (let i = 0; i < maxPages; i++) {
+    const res = await graphql<{ freight: GqlConnection<FreightAnalysisNode> }>(
+      `query freight($first: Int, $after: String) {
+        freight(params: {}, first: $first, after: $after) {
+          pageInfo { hasNextPage endCursor }
+          edges {
+            node {
+              id sequenceCode status type total subtotal realWeight modal
+              serviceAt finishedAt draftEmissionAt createdAt updatedAt
+              deliveryPredictionDate deliveryPredictionHour
+              invoicesTotalVolumes
+              sender { id name nickname cnpj }
+              recipient { id name nickname cnpj }
+              originCity { id name state { code } }
+              destinationCity { id name state { code } }
+              cte { key number }
+            }
+          }
+        }
+      }`,
+      { first: 50, after: cursor },
+      cacheOpts
+    );
+    all.push(...res.freight.edges.map((e) => e.node));
+    const info = res.freight.pageInfo;
+    if (!info?.hasNextPage || !info.endCursor) break;
+    cursor = info.endCursor;
+  }
+  return all;
+}
+
 export async function queryAllFreights(
   params: Record<string, unknown> = {},
-  maxPages = 50
+  maxPages = 50,
+  cacheOpts?: { revalidate: number; tags: string[] }
 ): Promise<FreightNode[]> {
   const all: FreightNode[] = [];
   let cursor: string | undefined;
   for (let i = 0; i < maxPages; i++) {
-    const res = await queryFreights(params, 50, cursor);
+    const res = await queryFreights(params, 50, cursor, cacheOpts);
     all.push(...res.freight.edges.map((e) => e.node));
     const info = res.freight.pageInfo;
     if (!info?.hasNextPage || !info.endCursor) break;

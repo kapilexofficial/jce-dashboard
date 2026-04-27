@@ -4,15 +4,13 @@ import { useState, useMemo } from "react";
 import {
   Truck,
   DollarSign,
-  AlertTriangle,
   TrendingUp,
   ArrowUpRight,
   ArrowDownRight,
   Weight,
 } from "lucide-react";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Separator } from "@/components/ui/separator";
 import {
   Select,
   SelectContent,
@@ -34,10 +32,6 @@ function fmt(value: number) {
 
 function fmtFull(value: number) {
   return new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(value);
-}
-
-function formatDate(dateStr: string) {
-  return new Date(dateStr).toLocaleDateString("pt-BR");
 }
 
 const MONTH_LABELS: Record<string, string> = {
@@ -161,8 +155,8 @@ export function DashboardClient({ freights: allFreights, occurrences: allOccurre
             <Truck className="h-5 w-5 text-primary/60" />
           </CardHeader>
           <CardContent>
-            <div className="text-4xl font-extrabold">{margins.length}</div>
-            <p className="text-xs text-muted-foreground mt-1">{freights.length} via GraphQL</p>
+            <div className="text-4xl font-extrabold">{freights.length}</div>
+            <p className="text-xs text-muted-foreground mt-1">{margins.length} com margem calculada</p>
           </CardContent>
         </Card>
 
@@ -227,86 +221,6 @@ export function DashboardClient({ freights: allFreights, occurrences: allOccurre
       <div className="grid gap-6 md:grid-cols-2">
         <TopClientsChart clients={topClients} />
         <RegionChart regions={regionData} />
-      </div>
-
-      {/* Recent Data Row */}
-      <div className="grid gap-6 md:grid-cols-2">
-        <Card>
-          <CardHeader className="pb-3">
-            <div className="flex items-center justify-between">
-              <CardTitle className="text-base">Fretes Recentes</CardTitle>
-              <Badge variant="outline" className="text-xs">{freights.length} carregados</Badge>
-            </div>
-          </CardHeader>
-          <CardContent>
-            <div className="space-y-1">
-              {freights.slice(0, 6).map((f, i) => (
-                <div key={f.id}>
-                  <div className="flex items-center justify-between py-2.5">
-                    <div className="flex items-center gap-3 flex-1 min-w-0">
-                      <div className="flex h-8 w-8 items-center justify-center rounded-full bg-primary/10 text-primary shrink-0">
-                        <Truck className="h-3.5 w-3.5" />
-                      </div>
-                      <div className="min-w-0">
-                        <div className="flex items-center gap-2">
-                          <span className="text-sm font-medium">#{f.sequenceCode}</span>
-                          <Badge variant={f.status === "done" ? "secondary" : "default"} className="text-[10px] px-1.5 py-0">
-                            {f.status === "done" ? "Finalizado" : f.status}
-                          </Badge>
-                        </div>
-                        <p className="text-xs text-muted-foreground truncate">
-                          {f.originCity?.name}/{f.originCity?.state?.code}{" "}
-                          <span className="text-primary">→</span>{" "}
-                          {f.destinationCity?.name}/{f.destinationCity?.state?.code}
-                        </p>
-                      </div>
-                    </div>
-                    <div className="text-right ml-3 shrink-0">
-                      <p className="text-sm font-semibold">{fmtFull(f.total)}</p>
-                      <p className="text-[10px] text-muted-foreground">{formatDate(f.serviceAt)}</p>
-                    </div>
-                  </div>
-                  {i < 5 && <Separator />}
-                </div>
-              ))}
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader className="pb-3">
-            <div className="flex items-center justify-between">
-              <CardTitle className="text-base">Ultimas Ocorrencias</CardTitle>
-              <Badge variant="destructive" className="text-xs">{occurrences.length} total</Badge>
-            </div>
-          </CardHeader>
-          <CardContent>
-            <div className="space-y-1">
-              {occurrences.slice(0, 6).map((occ, i) => (
-                <div key={occ.id}>
-                  <div className="flex items-center justify-between py-2.5">
-                    <div className="flex items-center gap-3 flex-1 min-w-0">
-                      <div className="flex h-8 w-8 items-center justify-center rounded-full bg-amber-500/10 text-amber-600 shrink-0">
-                        <AlertTriangle className="h-3.5 w-3.5" />
-                      </div>
-                      <div className="min-w-0">
-                        <span className="text-sm font-medium truncate block">{occ.occurrence.description}</span>
-                        <p className="text-xs text-muted-foreground">
-                          NF {occ.invoice.number} | Frete #{occ.freight.draft_number}
-                        </p>
-                      </div>
-                    </div>
-                    <div className="text-right ml-3 shrink-0">
-                      <p className="text-sm font-semibold">{fmtFull(occ.freight.total)}</p>
-                      <p className="text-[10px] text-muted-foreground">{formatDate(occ.occurrence_at)}</p>
-                    </div>
-                  </div>
-                  {i < 5 && <Separator />}
-                </div>
-              ))}
-            </div>
-          </CardContent>
-        </Card>
       </div>
     </div>
   );

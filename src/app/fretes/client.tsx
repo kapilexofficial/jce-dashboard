@@ -42,18 +42,22 @@ function formatWeight(kg: number) {
 
 const statusLabels: Record<string, string> = {
   done: "Finalizado",
+  finished: "Finalizado",
   in_transit: "Em Trânsito",
+  manifested: "Manifestado",
   pending: "Pendente",
   cancelled: "Cancelado",
   draft: "Rascunho",
 };
 
-const statusVariant: Record<string, "default" | "secondary" | "destructive" | "outline"> = {
-  done: "secondary",
-  in_transit: "default",
-  pending: "outline",
-  cancelled: "destructive",
-  draft: "outline",
+const statusClass: Record<string, string> = {
+  done: "bg-emerald-500/15 text-emerald-400 border-emerald-500/30",
+  finished: "bg-emerald-500/15 text-emerald-400 border-emerald-500/30",
+  in_transit: "bg-blue-500/15 text-blue-400 border-blue-500/30",
+  manifested: "bg-amber-500/15 text-amber-400 border-amber-500/30",
+  pending: "bg-muted text-muted-foreground border-border",
+  cancelled: "bg-red-500/15 text-red-400 border-red-500/30",
+  draft: "bg-muted text-muted-foreground border-border",
 };
 
 export function FretesClient({ freights }: { freights: FreightNode[] }) {
@@ -62,7 +66,24 @@ export function FretesClient({ freights }: { freights: FreightNode[] }) {
   const [dateStart, setDateStart] = useState("2025-01-01");
   const [dateEnd, setDateEnd] = useState(new Date().toISOString().split("T")[0]);
 
-  const statuses = [...new Set(freights.map((f) => f.status))];
+  const statusOrder = ["finished", "in_transit", "manifested", "pending", "cancelled", "draft"];
+  const statusesAvailable = new Set(freights.map((f) => f.status));
+  const statuses = statusOrder.filter((s) => statusesAvailable.has(s));
+  const statusCounts: Record<string, number> = {};
+  freights.forEach((f) => {
+    const key = f.status === "done" ? "finished" : f.status;
+    statusCounts[key] = (statusCounts[key] || 0) + 1;
+  });
+
+  const statusDot: Record<string, string> = {
+    done: "bg-emerald-400",
+    finished: "bg-emerald-400",
+    in_transit: "bg-blue-400",
+    manifested: "bg-amber-400",
+    pending: "bg-muted-foreground",
+    cancelled: "bg-red-400",
+    draft: "bg-muted-foreground",
+  };
 
   const filtered = freights.filter((f) => {
     const matchesSearch =
@@ -71,7 +92,10 @@ export function FretesClient({ freights }: { freights: FreightNode[] }) {
       f.recipient?.name?.toLowerCase().includes(search.toLowerCase()) ||
       f.cte?.key?.includes(search) ||
       String(f.sequenceCode).includes(search);
-    const matchesStatus = statusFilter === "all" || f.status === statusFilter;
+    const matchesStatus =
+      statusFilter === "all" ||
+      f.status === statusFilter ||
+      (statusFilter === "finished" && f.status === "done");
     const date = f.serviceAt?.split("T")[0] || "";
     const matchesDate = date >= dateStart && date <= dateEnd;
     return matchesSearch && matchesStatus && matchesDate;
@@ -98,14 +122,18 @@ export function FretesClient({ freights }: { freights: FreightNode[] }) {
           />
         </div>
         <Select value={statusFilter} onValueChange={(v) => setStatusFilter(v ?? "all")}>
-          <SelectTrigger className="w-[180px]">
+          <SelectTrigger className="w-[200px]">
             <SelectValue placeholder="Status" />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value="all">Todos</SelectItem>
+            <SelectItem value="all">Todos os status ({freights.length})</SelectItem>
             {statuses.map((s) => (
               <SelectItem key={s} value={s}>
-                {statusLabels[s] || s}
+                <span className="flex items-center gap-2">
+                  <span className={`h-2 w-2 rounded-full ${statusDot[s] || "bg-muted-foreground"}`} />
+                  <span>{statusLabels[s] || s}</span>
+                  <span className="text-muted-foreground text-xs">({statusCounts[s] || 0})</span>
+                </span>
               </SelectItem>
             ))}
           </SelectContent>
@@ -123,7 +151,6 @@ export function FretesClient({ freights }: { freights: FreightNode[] }) {
                 <TableHead>Destinatário</TableHead>
                 <TableHead>Rota</TableHead>
                 <TableHead>Peso</TableHead>
-                <TableHead>Modal</TableHead>
                 <TableHead>Status</TableHead>
                 <TableHead className="text-right">Valor</TableHead>
               </TableRow>
@@ -144,11 +171,10 @@ export function FretesClient({ freights }: { freights: FreightNode[] }) {
                     {f.destinationCity?.name}/{f.destinationCity?.state?.code}
                   </TableCell>
                   <TableCell className="text-xs">{formatWeight(f.realWeight)}</TableCell>
-                  <TableCell className="text-xs uppercase">{f.modal}</TableCell>
                   <TableCell>
                     <Badge
-                      variant={statusVariant[f.status] || "default"}
-                      className="text-xs"
+                      variant="outline"
+                      className={`text-xs ${statusClass[f.status] || ""}`}
                     >
                       {statusLabels[f.status] || f.status}
                     </Badge>
@@ -160,7 +186,7 @@ export function FretesClient({ freights }: { freights: FreightNode[] }) {
               ))}
               {filtered.length === 0 && (
                 <TableRow>
-                  <TableCell colSpan={9} className="text-center text-muted-foreground py-8">
+                  <TableCell colSpan={8} className="text-center text-muted-foreground py-8">
                     Nenhum frete encontrado
                   </TableCell>
                 </TableRow>
