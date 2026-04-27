@@ -357,18 +357,31 @@ export async function queryAllDrivers(
   let cursor: string | undefined;
   for (let i = 0; i < maxPages; i++) {
     const res = await graphql<{
-      individual: { pageInfo?: GqlPageInfo; edges: { node: DriverNode }[] };
+      individual: {
+        pageInfo?: GqlPageInfo;
+        edges: {
+          node: { id: string; name: string; cpf: string; driver: { id: string } | null };
+        }[];
+      };
     }>(
       `query individual($params: IndividualInput!, $first: Int, $after: String) {
         individual(params: $params, first: $first, after: $after) {
           pageInfo { hasNextPage endCursor }
-          edges { node { id name cpf } }
+          edges { node { id name cpf driver { id } } }
         }
       }`,
       { params: { driver: { active: true } }, first: 50, after: cursor },
       cacheOpts
     );
-    all.push(...res.individual.edges.map((e) => e.node));
+    res.individual.edges.forEach((e) => {
+      const n = e.node;
+      // Use Driver.id (matches manifest.mainDriverId), not Individual.id
+      all.push({
+        id: n.driver?.id || n.id,
+        name: n.name,
+        cpf: n.cpf,
+      });
+    });
     const info = res.individual.pageInfo;
     if (!info?.hasNextPage || !info.endCursor) break;
     cursor = info.endCursor;
