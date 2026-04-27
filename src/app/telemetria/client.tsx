@@ -133,9 +133,16 @@ export function TelemetriaClient({ vehicles }: { vehicles: VehicleHistory[] }) {
 
   const windowMin = allDates.length > 0 ? new Date(Math.min(...allDates)) : new Date();
   const windowMax = allDates.length > 0 ? new Date(Math.max(...allDates)) : new Date();
+  const windowMinInput = toDateInput(windowMin.toISOString());
+  const windowMaxInput = toDateInput(windowMax.toISOString());
+  const uniqueDays = useMemo(() => {
+    const set = new Set<string>();
+    for (const t of allDates) set.add(new Date(t).toISOString().slice(0, 10));
+    return set.size;
+  }, [allDates]);
 
-  const [dateStart, setDateStart] = useState(toDateInput(windowMin.toISOString()));
-  const [dateEnd, setDateEnd] = useState(toDateInput(windowMax.toISOString()));
+  const [dateStart, setDateStart] = useState(windowMinInput);
+  const [dateEnd, setDateEnd] = useState(windowMaxInput);
   const [selectedPlate, setSelectedPlate] = useState("all");
 
   const startTs = new Date(`${dateStart}T00:00:00`).getTime();
@@ -271,11 +278,42 @@ export function TelemetriaClient({ vehicles }: { vehicles: VehicleHistory[] }) {
         </p>
       </div>
 
-      <Card className="border-amber-500/30 bg-amber-500/5">
-        <CardContent className="pt-4 text-xs text-muted-foreground">
-          <span className="font-semibold text-amber-400">Janela disponível na API:</span>{" "}
-          {windowStartLocal} → {windowEndLocal} ({windowHours}h). O filtro abaixo opera dentro dessa janela.
-          Para histórico mensal é necessário coleta diária em base local (em desenvolvimento).
+      <Card className="border-amber-500/40 bg-amber-500/10">
+        <CardContent className="pt-4 pb-4">
+          <div className="flex items-start gap-3">
+            <div className="flex h-9 w-9 items-center justify-center rounded-full bg-amber-500/20 shrink-0">
+              <Activity className="h-4 w-4 text-amber-400" />
+            </div>
+            <div className="flex-1 text-xs">
+              <p className="font-semibold text-amber-300 text-sm">
+                Limite da API Elithium: histórico curto disponível
+              </p>
+              <p className="text-muted-foreground mt-1">
+                A API retorna apenas as <strong>últimas ~500 posições</strong> da frota — não há histórico mensal acessível por consulta.
+              </p>
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mt-3 pt-3 border-t border-amber-500/20">
+                <div>
+                  <p className="text-[10px] uppercase tracking-wide text-muted-foreground">Início dos dados</p>
+                  <p className="font-mono text-foreground mt-0.5">{windowStartLocal}</p>
+                </div>
+                <div>
+                  <p className="text-[10px] uppercase tracking-wide text-muted-foreground">Fim dos dados</p>
+                  <p className="font-mono text-foreground mt-0.5">{windowEndLocal}</p>
+                </div>
+                <div>
+                  <p className="text-[10px] uppercase tracking-wide text-muted-foreground">Janela total</p>
+                  <p className="font-mono text-foreground mt-0.5">{windowHours}h em {uniqueDays} dia{uniqueDays !== 1 ? "s" : ""}</p>
+                </div>
+                <div>
+                  <p className="text-[10px] uppercase tracking-wide text-muted-foreground">Veículos</p>
+                  <p className="font-mono text-foreground mt-0.5">{vehicles.length}</p>
+                </div>
+              </div>
+              <p className="text-[11px] text-muted-foreground mt-3 italic">
+                Os KPIs e gráficos abaixo refletem somente os dados desta janela — não o mês inteiro. Para histórico real é necessário (1) endpoint da Elithium com filtro de data ou (2) coleta diária em storage próprio.
+              </p>
+            </div>
+          </div>
         </CardContent>
       </Card>
 
@@ -284,11 +322,25 @@ export function TelemetriaClient({ vehicles }: { vehicles: VehicleHistory[] }) {
           <div className="flex flex-wrap gap-4 items-end">
             <div>
               <label className="text-xs font-medium text-muted-foreground uppercase tracking-wider mb-1.5 block">Início</label>
-              <Input type="date" value={dateStart} onChange={(e) => setDateStart(e.target.value)} className="w-[160px]" />
+              <Input
+                type="date"
+                value={dateStart}
+                min={windowMinInput}
+                max={windowMaxInput}
+                onChange={(e) => setDateStart(e.target.value)}
+                className="w-[160px]"
+              />
             </div>
             <div>
               <label className="text-xs font-medium text-muted-foreground uppercase tracking-wider mb-1.5 block">Fim</label>
-              <Input type="date" value={dateEnd} onChange={(e) => setDateEnd(e.target.value)} className="w-[160px]" />
+              <Input
+                type="date"
+                value={dateEnd}
+                min={windowMinInput}
+                max={windowMaxInput}
+                onChange={(e) => setDateEnd(e.target.value)}
+                className="w-[160px]"
+              />
             </div>
             <div className="min-w-[200px]">
               <label className="text-xs font-medium text-muted-foreground uppercase tracking-wider mb-1.5 block">Veículo</label>
