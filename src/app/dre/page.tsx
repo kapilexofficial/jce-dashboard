@@ -8,11 +8,15 @@ export default async function DrePage() {
   let freights: FreightDreNode[] = [];
   let margins: FreightMargin[] = [];
 
+  const today = new Date().toISOString().split("T")[0];
+  const yearStart = `${new Date().getFullYear()}-01-01`;
+
   try {
+    const cacheOpts = { revalidate: 300, tags: ["freights"] };
     [vehicles, freights, margins] = await Promise.all([
       getVehicles().catch(() => []),
-      queryAllFreightsForDre({}, 30).catch(() => []),
-      getAllFreightMargins("2025-01-01", new Date().toISOString().split("T")[0]).catch(() => []),
+      queryAllFreightsForDre({}, 30, cacheOpts).catch(() => []),
+      getAllFreightMargins(yearStart, today, cacheOpts).catch(() => []),
     ]);
   } catch (error) {
     console.error("Erro ao buscar dados DRE:", error);

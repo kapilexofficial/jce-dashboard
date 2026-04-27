@@ -6,7 +6,10 @@ const GRAPHQL_TOKEN = process.env.ESL_GRAPHQL_TOKEN || TOKEN;
 
 async function request<T>(
   path: string,
-  options?: RequestInit & { params?: Record<string, string> }
+  options?: RequestInit & {
+    params?: Record<string, string>;
+    cacheOpts?: { revalidate: number; tags: string[] };
+  }
 ): Promise<T> {
   const url = new URL(`${BASE_URL}${path}`);
   if (options?.params) {
@@ -15,14 +18,19 @@ async function request<T>(
     );
   }
 
+  const { cacheOpts, params: _, ...rest } = options || {};
+  void _;
+
   const res = await fetch(url.toString(), {
-    ...options,
+    ...rest,
     headers: {
       Authorization: `Bearer ${TOKEN}`,
       "Content-Type": "application/json",
       ...options?.headers,
     },
-    cache: "no-store",
+    ...(cacheOpts
+      ? { next: { revalidate: cacheOpts.revalidate, tags: cacheOpts.tags } }
+      : { cache: "no-store" as RequestCache }),
   });
 
   if (!res.ok) {
@@ -79,7 +87,8 @@ export async function getDebitBillings(since: string) {
 export async function getFreightMargins(
   serviceAtStart: string,
   serviceAtEnd: string,
-  start?: number
+  start?: number,
+  cacheOpts?: { revalidate: number; tags: string[] }
 ) {
   const params: Record<string, string> = {
     service_at_start: serviceAtStart,
@@ -88,17 +97,19 @@ export async function getFreightMargins(
   if (start) params.start = String(start);
   return request<FreightMarginsResponse>("/api/report/freight/margins", {
     params,
+    cacheOpts,
   });
 }
 
 export async function getAllFreightMargins(
   serviceAtStart: string,
-  serviceAtEnd: string
+  serviceAtEnd: string,
+  cacheOpts?: { revalidate: number; tags: string[] }
 ): Promise<FreightMargin[]> {
   const all: FreightMargin[] = [];
   let nextId: number | undefined;
   for (let i = 0; i < 100; i++) {
-    const res = await getFreightMargins(serviceAtStart, serviceAtEnd, nextId);
+    const res = await getFreightMargins(serviceAtStart, serviceAtEnd, nextId, cacheOpts);
     all.push(...res.data);
     if (!res.paging.next_id || res.data.length === 0) break;
     nextId = res.paging.next_id;
@@ -410,7 +421,8 @@ export interface FreightManifestNode {
 export async function queryFreightsForDre(
   params: Record<string, unknown>,
   first = 50,
-  after?: string
+  after?: string,
+  cacheOpts?: { revalidate: number; tags: string[] }
 ) {
   return graphql<{ freight: { pageInfo?: GqlPageInfo; edges: { node: FreightDreNode }[] } }>(
     `query freight($params: FreightInput!, $first: Int, $after: String) {
@@ -445,19 +457,21 @@ export async function queryFreightsForDre(
         }
       }
     }`,
-    { params, first, after }
+    { params, first, after },
+    cacheOpts
   );
 }
 
 /** Paginated fetch of all freights with DRE/manifest data (ESL caps pages at ~20). */
 export async function queryAllFreightsForDre(
   params: Record<string, unknown> = {},
-  maxPages = 50
+  maxPages = 50,
+  cacheOpts?: { revalidate: number; tags: string[] }
 ): Promise<FreightDreNode[]> {
   const all: FreightDreNode[] = [];
   let cursor: string | undefined;
   for (let i = 0; i < maxPages; i++) {
-    const res = await queryFreightsForDre(params, 50, cursor);
+    const res = await queryFreightsForDre(params, 50, cursor, cacheOpts);
     all.push(...res.freight.edges.map((e) => e.node));
     const info = res.freight.pageInfo;
     if (!info?.hasNextPage || !info.endCursor) break;

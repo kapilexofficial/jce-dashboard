@@ -6,15 +6,41 @@ import {
   Truck,
   Search,
   TrendingUp,
+  TrendingDown,
   DollarSign,
   Route,
   Weight,
   FileText,
+  Fuel,
+  Calendar,
+  Trophy,
 } from "lucide-react";
+import {
+  Bar,
+  BarChart,
+  CartesianGrid,
+  Cell,
+  LabelList,
+  XAxis,
+  YAxis,
+} from "recharts";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
+import {
+  ChartContainer,
+  ChartTooltip,
+  ChartTooltipContent,
+} from "@/components/ui/chart";
 import type { VehicleRest, FreightDreNode, FreightMargin } from "@/lib/esl-api";
 
 function fmtCurrency(v: number) {
@@ -44,10 +70,13 @@ export function DreClient({
   freights: FreightDreNode[];
   margins: FreightMargin[];
 }) {
+  const today = new Date().toISOString().split("T")[0];
+  const yearStart = `${new Date().getFullYear()}-01-01`;
+
   const [plateSearch, setPlateSearch] = useState("");
   const [selectedPlate, setSelectedPlate] = useState<string | null>(null);
-  const [dateStart, setDateStart] = useState("2025-01-01");
-  const [dateEnd, setDateEnd] = useState(new Date().toISOString().split("T")[0]);
+  const [dateStart, setDateStart] = useState(yearStart);
+  const [dateEnd, setDateEnd] = useState(today);
 
   // Build map of plates that have freight data
   const freightsWithVehicle = useMemo(() => {
@@ -216,24 +245,131 @@ export function DreClient({
     }
   }, [selectedPlate, filteredFreights, filteredMargins]);
 
-  // Summary for selected vehicle
+  // Summary for selected vehicle (with derived efficiency metrics)
   const vehicleSummary = useMemo(() => {
     if (!selectedPlate) return null;
     const data = filteredFreights;
     const revenue = data.reduce((s, f) => s + f.total, 0);
+    const fuel = data.reduce((s, f) => s + (f.lastManifest?.fuelSubtotal || 0), 0);
     const costs = data.reduce((s, f) => {
       const m = f.lastManifest;
       if (!m) return s;
       return s + (m.freightSubtotal || 0) + (m.deliverySubtotal || 0) + (m.pickSubtotal || 0) +
         (m.fuelSubtotal || 0) + (m.tollSubtotal || 0) + (m.dailySubtotal || 0) + (m.expensesSubtotal || 0);
     }, 0);
+    const km = data.reduce((s, f) => s + (f.lastManifest?.km || 0), 0);
+    const weight = data.reduce((s, f) => s + f.realWeight, 0);
+    const result = revenue - costs;
+    const days = Math.max(
+      1,
+      Math.round(
+        (new Date(dateEnd).getTime() - new Date(dateStart).getTime()) / 86400000
+      ) + 1
+    );
     return {
       freights: data.length,
       revenue,
-      weight: data.reduce((s, f) => s + f.realWeight, 0),
-      km: data.reduce((s, f) => s + (f.lastManifest?.km || 0), 0),
-      result: revenue - costs,
+      weight,
+      km,
+      result,
+      fuel,
+      costs,
+      marginPct: revenue > 0 ? (result / revenue) * 100 : 0,
+      revenuePerKm: km > 0 ? revenue / km : 0,
+      revenuePerTon: weight > 0 ? revenue / (weight / 1000) : 0,
+      fuelPctOfRevenue: revenue > 0 ? (fuel / revenue) * 100 : 0,
+      profitPerDay: result / days,
+      days,
     };
+  }, [selectedPlate, filteredFreights, dateStart, dateEnd]);
+
+  // Aggregation per vehicle (for ranking)
+  type VehicleAgg = {
+    plate: string;
+    model: string;
+    freights: number;
+    revenue: number;
+    costs: number;
+    result: number;
+    marginPct: number;
+    km: number;
+    weight: number;
+    revenuePerKm: number;
+  };
+  const byVehicle = useMemo<VehicleAgg[]>(() => {
+    const map = new Map<string, VehicleAgg>();
+    freightsWithVehicle.forEach((f) => {
+      const date = f.serviceAt.split("T")[0];
+      if (date < dateStart || date > dateEnd) return;
+      const plate = f.lastManifest!.vehicle.licensePlate;
+      const model = f.lastManifest!.vehicle.model || "—";
+      if (!map.has(plate)) {
+        map.set(plate, {
+          plate,
+          model,
+          freights: 0,
+          revenue: 0,
+          costs: 0,
+          result: 0,
+          marginPct: 0,
+          km: 0,
+          weight: 0,
+          revenuePerKm: 0,
+        });
+      }
+      const v = map.get(plate)!;
+      const m = f.lastManifest!;
+      v.freights += 1;
+      v.revenue += f.total || 0;
+      v.costs +=
+        (m.freightSubtotal || 0) +
+        (m.deliverySubtotal || 0) +
+        (m.pickSubtotal || 0) +
+        (m.fuelSubtotal || 0) +
+        (m.tollSubtotal || 0) +
+        (m.dailySubtotal || 0) +
+        (m.expensesSubtotal || 0);
+      v.km += m.km || 0;
+      v.weight += f.realWeight || 0;
+    });
+    return [...map.values()].map((v) => ({
+      ...v,
+      result: v.revenue - v.costs,
+      marginPct: v.revenue > 0 ? ((v.revenue - v.costs) / v.revenue) * 100 : 0,
+      revenuePerKm: v.km > 0 ? v.revenue / v.km : 0,
+    }));
+  }, [freightsWithVehicle, dateStart, dateEnd]);
+
+  // Monthly evolution for selected vehicle
+  const vehicleMonthly = useMemo(() => {
+    if (!selectedPlate) return [];
+    type Month = { month: string; revenue: number; costs: number; result: number };
+    const map = new Map<string, Month>();
+    filteredFreights.forEach((f) => {
+      const key = f.serviceAt.slice(0, 7); // YYYY-MM
+      if (!map.has(key)) map.set(key, { month: key, revenue: 0, costs: 0, result: 0 });
+      const m = f.lastManifest;
+      const c = m
+        ? (m.freightSubtotal || 0) +
+          (m.deliverySubtotal || 0) +
+          (m.pickSubtotal || 0) +
+          (m.fuelSubtotal || 0) +
+          (m.tollSubtotal || 0) +
+          (m.dailySubtotal || 0) +
+          (m.expensesSubtotal || 0)
+        : 0;
+      const row = map.get(key)!;
+      row.revenue += f.total || 0;
+      row.costs += c;
+    });
+    const months = ["Jan", "Fev", "Mar", "Abr", "Mai", "Jun", "Jul", "Ago", "Set", "Out", "Nov", "Dez"];
+    return [...map.values()]
+      .sort((a, b) => a.month.localeCompare(b.month))
+      .map((r) => ({
+        ...r,
+        result: r.revenue - r.costs,
+        label: `${months[parseInt(r.month.split("-")[1]) - 1]}/${r.month.split("-")[0].slice(2)}`,
+      }));
   }, [selectedPlate, filteredFreights]);
 
   return (
@@ -366,6 +502,241 @@ export function DreClient({
             </CardContent>
           </Card>
         </div>
+      )}
+
+      {/* Eficiência por veículo (KPIs derivados) */}
+      {selectedPlate && vehicleSummary && (
+        <div className="grid gap-4 grid-cols-2 md:grid-cols-4">
+          <Card>
+            <CardHeader className="pb-2">
+              <CardTitle className="text-xs font-medium uppercase tracking-wider text-muted-foreground flex items-center gap-1.5">
+                <Route className="h-3.5 w-3.5" /> R$/km
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold">{fmtCurrency(vehicleSummary.revenuePerKm)}</div>
+              <p className="text-[11px] text-muted-foreground mt-0.5">receita por km rodado</p>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardHeader className="pb-2">
+              <CardTitle className="text-xs font-medium uppercase tracking-wider text-muted-foreground flex items-center gap-1.5">
+                <Weight className="h-3.5 w-3.5" /> R$/ton
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold">{fmtCurrency(vehicleSummary.revenuePerTon)}</div>
+              <p className="text-[11px] text-muted-foreground mt-0.5">receita por tonelada</p>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardHeader className="pb-2">
+              <CardTitle className="text-xs font-medium uppercase tracking-wider text-muted-foreground flex items-center gap-1.5">
+                <Fuel className="h-3.5 w-3.5" /> Combustível
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className={`text-2xl font-bold ${
+                vehicleSummary.fuelPctOfRevenue > 30 ? "text-red-400" :
+                vehicleSummary.fuelPctOfRevenue > 20 ? "text-amber-400" : "text-foreground"
+              }`}>
+                {fmtPct(vehicleSummary.fuelPctOfRevenue)}
+              </div>
+              <p className="text-[11px] text-muted-foreground mt-0.5">{fmtCurrency(vehicleSummary.fuel)} da receita</p>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardHeader className="pb-2">
+              <CardTitle className="text-xs font-medium uppercase tracking-wider text-muted-foreground flex items-center gap-1.5">
+                <Calendar className="h-3.5 w-3.5" /> Lucro/dia
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className={`text-2xl font-bold ${
+                vehicleSummary.profitPerDay >= 0 ? "text-emerald-400" : "text-red-400"
+              }`}>
+                {fmtCurrency(vehicleSummary.profitPerDay)}
+              </div>
+              <p className="text-[11px] text-muted-foreground mt-0.5">média em {vehicleSummary.days} dias</p>
+            </CardContent>
+          </Card>
+        </div>
+      )}
+
+      {/* Evolução mensal do veículo */}
+      {selectedPlate && vehicleMonthly.length > 0 && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <TrendingUp className="h-5 w-5 text-primary" /> Evolução mensal — {selectedPlate}
+            </CardTitle>
+            <CardDescription>
+              Receita, custos e resultado por mês de início do serviço
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <ChartContainer config={{}} className="h-[260px] w-full">
+              <BarChart
+                data={vehicleMonthly}
+                accessibilityLayer
+                margin={{ top: 24, right: 8, left: 0, bottom: 0 }}
+              >
+                <CartesianGrid vertical={false} />
+                <XAxis dataKey="label" tickLine={false} axisLine={false} tickMargin={8} />
+                <YAxis tickLine={false} axisLine={false} tickFormatter={(v) => {
+                  if (Math.abs(v) >= 1_000_000) return `${(v / 1_000_000).toFixed(1)}M`;
+                  if (Math.abs(v) >= 1_000) return `${(v / 1_000).toFixed(0)}k`;
+                  return String(v);
+                }} />
+                <ChartTooltip
+                  content={
+                    <ChartTooltipContent
+                      labelKey="label"
+                      formatter={(value, name) => {
+                        const labels: Record<string, string> = {
+                          revenue: "Receita",
+                          costs: "Custos",
+                          result: "Resultado",
+                        };
+                        return [
+                          fmtCurrency(value as number),
+                          labels[String(name)] || String(name),
+                        ];
+                      }}
+                    />
+                  }
+                />
+                <Bar dataKey="revenue" fill="oklch(0.68 0.19 265)" radius={[4, 4, 0, 0]} />
+                <Bar dataKey="costs" fill="oklch(0.65 0.20 25)" radius={[4, 4, 0, 0]} />
+                <Bar dataKey="result" radius={[4, 4, 0, 0]}>
+                  {vehicleMonthly.map((m, i) => (
+                    <Cell key={i} fill={m.result >= 0 ? "oklch(0.72 0.17 160)" : "oklch(0.65 0.22 22)"} />
+                  ))}
+                  <LabelList
+                    dataKey="result"
+                    position="top"
+                    formatter={(value) => {
+                      const v = Number(value);
+                      if (!isFinite(v)) return "";
+                      if (Math.abs(v) >= 1000) return `${(v / 1000).toFixed(0)}k`;
+                      return v.toFixed(0);
+                    }}
+                    className="fill-foreground text-[10px]"
+                  />
+                </Bar>
+              </BarChart>
+            </ChartContainer>
+            <div className="flex items-center gap-4 mt-3 text-[11px] text-muted-foreground">
+              <span className="flex items-center gap-1.5"><span className="h-2 w-2 rounded-full" style={{ background: "oklch(0.68 0.19 265)" }} /> Receita</span>
+              <span className="flex items-center gap-1.5"><span className="h-2 w-2 rounded-full" style={{ background: "oklch(0.65 0.20 25)" }} /> Custos</span>
+              <span className="flex items-center gap-1.5"><span className="h-2 w-2 rounded-full" style={{ background: "oklch(0.72 0.17 160)" }} /> Resultado positivo</span>
+              <span className="flex items-center gap-1.5"><span className="h-2 w-2 rounded-full" style={{ background: "oklch(0.65 0.22 22)" }} /> Resultado negativo</span>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Ranking comparativo (sem veículo selecionado) */}
+      {!selectedPlate && byVehicle.length > 0 && (
+        <Card>
+          <CardHeader>
+            <div className="flex items-center justify-between">
+              <div>
+                <CardTitle className="flex items-center gap-2">
+                  <Trophy className="h-5 w-5 text-primary" /> Ranking de veículos
+                </CardTitle>
+                <CardDescription>
+                  Cada veículo como uma mini empresa — clique numa linha para ver a DRE individual
+                </CardDescription>
+              </div>
+              <Badge variant="outline" className="text-xs">
+                {byVehicle.length} veículos com dados
+              </Badge>
+            </div>
+          </CardHeader>
+          <CardContent>
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>#</TableHead>
+                  <TableHead>Placa</TableHead>
+                  <TableHead className="text-right">Fretes</TableHead>
+                  <TableHead className="text-right">Km</TableHead>
+                  <TableHead className="text-right">Receita</TableHead>
+                  <TableHead className="text-right">Custos</TableHead>
+                  <TableHead className="text-right">Resultado</TableHead>
+                  <TableHead className="text-right">Margem</TableHead>
+                  <TableHead className="text-right">R$/km</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {[...byVehicle]
+                  .sort((a, b) => b.result - a.result)
+                  .map((v, i) => (
+                    <TableRow
+                      key={v.plate}
+                      className="cursor-pointer hover:bg-accent/50"
+                      onClick={() => {
+                        setSelectedPlate(v.plate);
+                        window.scrollTo({ top: 0, behavior: "smooth" });
+                      }}
+                    >
+                      <TableCell className="text-xs text-muted-foreground font-mono">
+                        {i + 1}
+                      </TableCell>
+                      <TableCell>
+                        <div className="font-bold font-mono text-sm">{v.plate}</div>
+                        <div className="text-[10px] text-muted-foreground truncate max-w-[140px]">
+                          {v.model}
+                        </div>
+                      </TableCell>
+                      <TableCell className="text-right text-xs font-mono">
+                        {v.freights}
+                      </TableCell>
+                      <TableCell className="text-right text-xs font-mono">
+                        {v.km > 0 ? v.km.toLocaleString("pt-BR") : "—"}
+                      </TableCell>
+                      <TableCell className="text-right text-xs font-mono">
+                        {fmtCurrency(v.revenue)}
+                      </TableCell>
+                      <TableCell className="text-right text-xs font-mono text-red-400/80">
+                        {fmtCurrency(v.costs)}
+                      </TableCell>
+                      <TableCell
+                        className={`text-right text-xs font-mono font-bold ${
+                          v.result >= 0 ? "text-emerald-400" : "text-red-400"
+                        }`}
+                      >
+                        {fmtCurrency(v.result)}
+                      </TableCell>
+                      <TableCell className="text-right">
+                        <Badge
+                          variant="outline"
+                          className={`text-[10px] font-mono ${
+                            v.marginPct >= 20
+                              ? "bg-emerald-500/15 text-emerald-400 border-emerald-500/30"
+                              : v.marginPct >= 0
+                              ? "bg-amber-500/15 text-amber-400 border-amber-500/30"
+                              : "bg-red-500/15 text-red-400 border-red-500/30"
+                          }`}
+                        >
+                          {v.marginPct >= 0 ? (
+                            <TrendingUp className="h-2.5 w-2.5 mr-0.5" />
+                          ) : (
+                            <TrendingDown className="h-2.5 w-2.5 mr-0.5" />
+                          )}
+                          {fmtPct(v.marginPct)}
+                        </Badge>
+                      </TableCell>
+                      <TableCell className="text-right text-xs font-mono text-muted-foreground">
+                        {v.km > 0 ? fmtCurrency(v.revenuePerKm) : "—"}
+                      </TableCell>
+                    </TableRow>
+                  ))}
+              </TableBody>
+            </Table>
+          </CardContent>
+        </Card>
       )}
 
       {/* DRE Table */}
