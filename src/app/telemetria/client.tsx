@@ -354,6 +354,81 @@ export function TelemetriaClient({ vehicles }: { vehicles: VehicleHistory[] }) {
         </Card>
       </div>
 
+      {byBrand.length > 0 && (
+        <div className="space-y-3">
+          <p className="text-[10px] uppercase tracking-widest text-primary font-bold">Desempenho por Marca</p>
+          <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
+            {byBrand.map((b, i) => {
+              const pctKm = totalKmFleet > 0 ? (b.km / totalKmFleet) * 100 : 0;
+              return (
+                <Card key={b.brand} className="overflow-hidden relative">
+                  <div className="absolute inset-x-0 top-0 h-1" style={{ background: COLORS[i % COLORS.length] }} />
+                  <CardContent className="pt-5 pb-5 px-5 space-y-2">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <BrandLogo brand={b.brand} size={20} />
+                        <p className="text-sm font-bold">{b.brand}</p>
+                      </div>
+                      <Badge variant="outline" className="text-[10px]">{b.vehicles} veíc.</Badge>
+                    </div>
+                    <div>
+                      <div className="text-2xl font-extrabold">{fmt(b.kml)} <span className="text-xs text-muted-foreground font-normal">km/l</span></div>
+                    </div>
+                    <div className="space-y-1 text-xs text-muted-foreground pt-1 border-t border-border">
+                      <div className="flex justify-between"><span>Km rodados</span><span className="font-mono text-foreground">{fmtInt(b.km)}</span></div>
+                      <div className="flex justify-between"><span>Litros</span><span className="font-mono text-foreground">{fmtInt(b.litros)}</span></div>
+                      <div className="flex justify-between"><span>% da frota</span><span className="font-mono text-foreground">{fmt(pctKm, 1)}%</span></div>
+                    </div>
+                  </CardContent>
+                </Card>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+      {byModel.length > 0 && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2"><Truck className="h-5 w-5 text-primary" /> Desempenho por Modelo</CardTitle>
+            <CardDescription>Agregado do período — ordenado por km rodados</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Marca</TableHead>
+                  <TableHead>Modelo</TableHead>
+                  <TableHead className="text-right">Veículos</TableHead>
+                  <TableHead className="text-right">Km</TableHead>
+                  <TableHead className="text-right">Litros</TableHead>
+                  <TableHead className="text-right">Km/l</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {byModel.map((m) => (
+                  <TableRow key={m.model}>
+                    <TableCell className="text-xs text-muted-foreground">
+                      <span className="flex items-center gap-2">
+                        <BrandLogo brand={m.brand} size={16} />
+                        {m.brand}
+                      </span>
+                    </TableCell>
+                    <TableCell className="font-medium">{m.model}</TableCell>
+                    <TableCell className="text-right font-mono">{m.vehicles}</TableCell>
+                    <TableCell className="text-right font-mono">{fmtInt(m.km)}</TableCell>
+                    <TableCell className="text-right font-mono">{fmt(m.litros, 1)}</TableCell>
+                    <TableCell className="text-right font-mono">
+                      <span className={m.kml >= 2.5 ? "text-emerald-400 font-semibold" : m.kml >= 1.5 ? "" : "text-amber-400"}>{fmt(m.kml)}</span>
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </CardContent>
+        </Card>
+      )}
+
       {byTraction.length > 0 && (
         <div className="space-y-3">
           <p className="text-[10px] uppercase tracking-widest text-primary font-bold">Comparativo por Tração</p>
