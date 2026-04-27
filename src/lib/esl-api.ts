@@ -427,6 +427,7 @@ export async function queryAllFreightsWithManifest(
               cte { key number }
               lastManifest {
                 id mainDriverId serviceDate status
+                departuredAt closedAt
                 vehicle { id licensePlate model }
                 totalCost freightSubtotal deliverySubtotal pickSubtotal
                 fuelSubtotal tollSubtotal dailySubtotal
@@ -473,6 +474,8 @@ export interface FreightManifestNode {
     mainDriverId: number | null;
     serviceDate: string | null;
     status: string;
+    departuredAt: string | null;
+    closedAt: string | null;
     vehicle: { id: string; licensePlate: string; model: string };
     totalCost: number;
     freightSubtotal: number;

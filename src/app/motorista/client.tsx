@@ -37,6 +37,32 @@ function fmtPct(v: number) {
   return `${v.toFixed(1)}%`;
 }
 
+/**
+ * Expands inclusive date range to YYYY-MM-DD strings, intersecting with [filterStart, filterEnd].
+ * Used to count "days on the road" from manifest departuredAt → closedAt.
+ */
+function expandTravelDays(
+  start: string | null | undefined,
+  end: string | null | undefined,
+  filterStart: string,
+  filterEnd: string
+): string[] {
+  if (!start || !end) return [];
+  const s = start.split("T")[0];
+  const e = end.split("T")[0];
+  const lo = s > filterStart ? s : filterStart;
+  const hi = e < filterEnd ? e : filterEnd;
+  if (lo > hi) return [];
+  const days: string[] = [];
+  const cur = new Date(lo + "T00:00:00");
+  const end_ = new Date(hi + "T00:00:00");
+  while (cur <= end_) {
+    days.push(cur.toISOString().split("T")[0]);
+    cur.setDate(cur.getDate() + 1);
+  }
+  return days;
+}
+
 export function MotoristaClient({ drivers, freights }: { drivers: DriverNode[]; freights: FreightManifestNode[] }) {
   const today = new Date().toISOString().split("T")[0];
   const yearStart = `${new Date().getFullYear()}-01-01`;
@@ -121,7 +147,23 @@ export function MotoristaClient({ drivers, freights }: { drivers: DriverNode[]; 
       origin: `${f.originCity.name}/${f.originCity.state.code}`,
       dest: `${f.destinationCity.name}/${f.destinationCity.state.code}`,
     }));
-    const uniqueDays = new Set(driverFreights.map((f) => f.serviceAt.split("T")[0]));
+    // Travel days: expand each unique manifest's [departuredAt → closedAt] (intersected with filter).
+    // Fallback to serviceAt for manifests without those timestamps.
+    const seenManifests = new Set<number>();
+    const travelDaySet = new Set<string>();
+    driverFreights.forEach((f) => {
+      const m = f.lastManifest;
+      if (!m) return;
+      if (seenManifests.has(m.id)) return;
+      seenManifests.add(m.id);
+      const days = expandTravelDays(m.departuredAt, m.closedAt, dateStart, dateEnd);
+      if (days.length > 0) {
+        days.forEach((d) => travelDaySet.add(d));
+      } else {
+        travelDaySet.add(f.serviceAt.split("T")[0]);
+      }
+    });
+    const uniqueDays = travelDaySet;
 
     const days = uniqueDays.size || 1;
 
@@ -138,7 +180,7 @@ export function MotoristaClient({ drivers, freights }: { drivers: DriverNode[]; 
       revenuePerKm: km > 0 ? revenue / km : 0,
       fuelPctOfRevenue: revenue > 0 ? (fuelCost / revenue) * 100 : 0,
     };
-  }, [driverFreights]);
+  }, [driverFreights, dateStart, dateEnd]);
 
   const selectedName = selectedDriverId ? driverMap[selectedDriverId] || `#${selectedDriverId}` : null;
 
@@ -156,7 +198,10 @@ export function MotoristaClient({ drivers, freights }: { drivers: DriverNode[]; 
     revenuePerKm: number;
   };
   const byDriver = useMemo<DriverAgg[]>(() => {
-    const map = new Map<number, DriverAgg & { uniqueDays: Set<string> }>();
+    const map = new Map<
+      number,
+      DriverAgg & { uniqueDays: Set<string>; seenManifests: Set<number> }
+    >();
     freightsWithDriver.forEach((f) => {
       const date = f.serviceAt.split("T")[0];
       if (date < dateStart || date > dateEnd) return;
@@ -175,6 +220,7 @@ export function MotoristaClient({ drivers, freights }: { drivers: DriverNode[]; 
           days: 0,
           revenuePerKm: 0,
           uniqueDays: new Set<string>(),
+          seenManifests: new Set<number>(),
         });
       }
       const agg = map.get(did)!;
@@ -188,7 +234,16 @@ export function MotoristaClient({ drivers, freights }: { drivers: DriverNode[]; 
         (m.dailySubtotal || 0) +
         (m.expensesSubtotal || 0);
       agg.km += m.km || 0;
-      agg.uniqueDays.add(date);
+      // Travel days: expand departuredAt → closedAt once per manifest
+      if (!agg.seenManifests.has(m.id)) {
+        agg.seenManifests.add(m.id);
+        const days = expandTravelDays(m.departuredAt, m.closedAt, dateStart, dateEnd);
+        if (days.length > 0) {
+          days.forEach((d) => agg.uniqueDays.add(d));
+        } else {
+          agg.uniqueDays.add(date);
+        }
+      }
     });
     return [...map.values()].map((d) => ({
       id: d.id,
@@ -282,8 +337,8 @@ export function MotoristaClient({ drivers, freights }: { drivers: DriverNode[]; 
                 </CardContent>
               </Card>
               <Card>
-                <CardContent className="pt-4 pb-4 px-4">
-                  <p className="text-[10px] uppercase tracking-wider text-muted-foreground font-medium">Dias Trab.</p>
+                <CardContent className="pt-4 pb-4 px-4" title="Dias em viagem (manifest.departuredAt → manifest.closedAt)">
+                  <p className="text-[10px] uppercase tracking-wider text-muted-foreground font-medium">Dias em Viagem</p>
                   <p className="text-2xl font-bold mt-1">{summary.daysWorked}</p>
                 </CardContent>
               </Card>
