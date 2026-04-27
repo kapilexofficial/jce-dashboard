@@ -1,6 +1,6 @@
 export const dynamic = "force-dynamic";
 
-import { queryDrivers, queryFreightsWithManifest, type DriverNode, type FreightManifestNode } from "@/lib/esl-api";
+import { queryAllDrivers, queryAllFreightsWithManifest, type DriverNode, type FreightManifestNode } from "@/lib/esl-api";
 import { MotoristaClient } from "./client";
 
 export default async function MotoristaPage() {
@@ -8,9 +8,10 @@ export default async function MotoristaPage() {
   let freights: FreightManifestNode[] = [];
 
   try {
+    const cacheOpts = { revalidate: 300, tags: ["freights"] };
     [drivers, freights] = await Promise.all([
-      queryDrivers(100).then((d) => d.individual.edges.map((e) => e.node)).catch(() => []),
-      queryFreightsWithManifest(100).then((d) => d.freight.edges.map((e) => e.node)).catch(() => []),
+      queryAllDrivers(20, cacheOpts).catch(() => []),
+      queryAllFreightsWithManifest(50, cacheOpts).catch(() => []),
     ]);
   } catch (error) {
     console.error("Erro ao buscar dados:", error);

@@ -349,6 +349,33 @@ export async function queryDrivers(first = 100) {
   );
 }
 
+export async function queryAllDrivers(
+  maxPages = 50,
+  cacheOpts?: { revalidate: number; tags: string[] }
+): Promise<DriverNode[]> {
+  const all: DriverNode[] = [];
+  let cursor: string | undefined;
+  for (let i = 0; i < maxPages; i++) {
+    const res = await graphql<{
+      individual: { pageInfo?: GqlPageInfo; edges: { node: DriverNode }[] };
+    }>(
+      `query individual($params: IndividualInput!, $first: Int, $after: String) {
+        individual(params: $params, first: $first, after: $after) {
+          pageInfo { hasNextPage endCursor }
+          edges { node { id name cpf } }
+        }
+      }`,
+      { params: { driver: { active: true } }, first: 50, after: cursor },
+      cacheOpts
+    );
+    all.push(...res.individual.edges.map((e) => e.node));
+    const info = res.individual.pageInfo;
+    if (!info?.hasNextPage || !info.endCursor) break;
+    cursor = info.endCursor;
+  }
+  return all;
+}
+
 export async function queryFreightsWithManifest(first = 100) {
   return graphql<{ freight: { edges: { node: FreightManifestNode }[] } }>(
     `query freight($params: FreightInput!, $first: Int) {
@@ -375,6 +402,50 @@ export async function queryFreightsWithManifest(first = 100) {
     }`,
     { params: {}, first }
   );
+}
+
+export async function queryAllFreightsWithManifest(
+  maxPages = 50,
+  cacheOpts?: { revalidate: number; tags: string[] }
+): Promise<FreightManifestNode[]> {
+  const all: FreightManifestNode[] = [];
+  let cursor: string | undefined;
+  for (let i = 0; i < maxPages; i++) {
+    const res = await graphql<{
+      freight: { pageInfo?: GqlPageInfo; edges: { node: FreightManifestNode }[] };
+    }>(
+      `query freight($params: FreightInput!, $first: Int, $after: String) {
+        freight(params: $params, first: $first, after: $after) {
+          pageInfo { hasNextPage endCursor }
+          edges {
+            node {
+              id sequenceCode total subtotal realWeight serviceAt status modal
+              sender { name }
+              recipient { name }
+              originCity { name state { code } }
+              destinationCity { name state { code } }
+              cte { key number }
+              lastManifest {
+                id mainDriverId serviceDate status
+                vehicle { id licensePlate model }
+                totalCost freightSubtotal deliverySubtotal pickSubtotal
+                fuelSubtotal tollSubtotal dailySubtotal
+                expensesSubtotal advanceSubtotal discountsSubtotal
+                km traveledKm
+              }
+            }
+          }
+        }
+      }`,
+      { params: {}, first: 50, after: cursor },
+      cacheOpts
+    );
+    all.push(...res.freight.edges.map((e) => e.node));
+    const info = res.freight.pageInfo;
+    if (!info?.hasNextPage || !info.endCursor) break;
+    cursor = info.endCursor;
+  }
+  return all;
 }
 
 export interface DriverNode {

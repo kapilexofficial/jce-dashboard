@@ -4,22 +4,24 @@ import { useState, useMemo } from "react";
 import {
   Search,
   Truck,
-  Route,
-  Weight,
-  DollarSign,
-  TrendingUp,
-  Calendar,
-  Fuel,
-  MapPin,
   Clock,
-  FileText,
   User,
+  Trophy,
+  TrendingUp,
+  TrendingDown,
 } from "lucide-react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
-import { Separator } from "@/components/ui/separator";
 import { DateFilter } from "@/components/date-filter";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
 import type { DriverNode, FreightManifestNode } from "@/lib/esl-api";
 
 function fmt(v: number) {
@@ -31,16 +33,18 @@ function fmtShort(v: number) {
   return fmt(v);
 }
 
-const COLORS = [
-  "oklch(0.68 0.19 265)", "oklch(0.75 0.18 165)", "oklch(0.78 0.15 55)",
-  "oklch(0.70 0.20 310)", "oklch(0.72 0.14 80)", "oklch(0.58 0.15 200)",
-];
+function fmtPct(v: number) {
+  return `${v.toFixed(1)}%`;
+}
 
 export function MotoristaClient({ drivers, freights }: { drivers: DriverNode[]; freights: FreightManifestNode[] }) {
+  const today = new Date().toISOString().split("T")[0];
+  const yearStart = `${new Date().getFullYear()}-01-01`;
+
   const [search, setSearch] = useState("");
   const [selectedDriverId, setSelectedDriverId] = useState<number | null>(null);
-  const [dateStart, setDateStart] = useState("2025-01-01");
-  const [dateEnd, setDateEnd] = useState(new Date().toISOString().split("T")[0]);
+  const [dateStart, setDateStart] = useState(yearStart);
+  const [dateEnd, setDateEnd] = useState(today);
 
   // Freights with manifest + driver
   const freightsWithDriver = useMemo(() => {
@@ -119,6 +123,8 @@ export function MotoristaClient({ drivers, freights }: { drivers: DriverNode[]; 
     }));
     const uniqueDays = new Set(driverFreights.map((f) => f.serviceAt.split("T")[0]));
 
+    const days = uniqueDays.size || 1;
+
     return {
       trips: driverFreights.length,
       revenue, weight, km, traveledKm,
@@ -127,10 +133,76 @@ export function MotoristaClient({ drivers, freights }: { drivers: DriverNode[]; 
       plates, routes,
       daysWorked: uniqueDays.size,
       marginPct: revenue > 0 ? (result / revenue) * 100 : 0,
+      kmPerDay: km / days,
+      tripsPerDay: driverFreights.length / days,
+      revenuePerKm: km > 0 ? revenue / km : 0,
+      fuelPctOfRevenue: revenue > 0 ? (fuelCost / revenue) * 100 : 0,
     };
   }, [driverFreights]);
 
   const selectedName = selectedDriverId ? driverMap[selectedDriverId] || `#${selectedDriverId}` : null;
+
+  // Ranking — aggregation per driver (with date filter applied)
+  type DriverAgg = {
+    id: number;
+    name: string;
+    trips: number;
+    revenue: number;
+    costs: number;
+    result: number;
+    marginPct: number;
+    km: number;
+    days: number;
+    revenuePerKm: number;
+  };
+  const byDriver = useMemo<DriverAgg[]>(() => {
+    const map = new Map<number, DriverAgg & { uniqueDays: Set<string> }>();
+    freightsWithDriver.forEach((f) => {
+      const date = f.serviceAt.split("T")[0];
+      if (date < dateStart || date > dateEnd) return;
+      const did = f.lastManifest!.mainDriverId!;
+      const m = f.lastManifest!;
+      if (!map.has(did)) {
+        map.set(did, {
+          id: did,
+          name: driverMap[did] || `Motorista #${did}`,
+          trips: 0,
+          revenue: 0,
+          costs: 0,
+          result: 0,
+          marginPct: 0,
+          km: 0,
+          days: 0,
+          revenuePerKm: 0,
+          uniqueDays: new Set<string>(),
+        });
+      }
+      const agg = map.get(did)!;
+      agg.trips += 1;
+      agg.revenue += f.total || 0;
+      agg.costs +=
+        (m.freightSubtotal || 0) +
+        (m.deliverySubtotal || 0) +
+        (m.fuelSubtotal || 0) +
+        (m.tollSubtotal || 0) +
+        (m.dailySubtotal || 0) +
+        (m.expensesSubtotal || 0);
+      agg.km += m.km || 0;
+      agg.uniqueDays.add(date);
+    });
+    return [...map.values()].map((d) => ({
+      id: d.id,
+      name: d.name,
+      trips: d.trips,
+      revenue: d.revenue,
+      costs: d.costs,
+      result: d.revenue - d.costs,
+      marginPct: d.revenue > 0 ? ((d.revenue - d.costs) / d.revenue) * 100 : 0,
+      km: d.km,
+      days: d.uniqueDays.size,
+      revenuePerKm: d.km > 0 ? d.revenue / d.km : 0,
+    }));
+  }, [freightsWithDriver, dateStart, dateEnd, driverMap]);
 
   return (
     <div className="space-y-6">
@@ -251,6 +323,47 @@ export function MotoristaClient({ drivers, freights }: { drivers: DriverNode[]; 
                   <p className={`text-2xl font-bold mt-1 ${summary.result >= 0 ? "text-emerald-400" : "text-red-400"}`}>
                     {summary.marginPct.toFixed(1)}%
                   </p>
+                </CardContent>
+              </Card>
+            </div>
+          )}
+
+          {/* Produtividade (KPIs derivados) */}
+          {summary && (
+            <div className="grid gap-3 grid-cols-2 md:grid-cols-4">
+              <Card>
+                <CardContent className="pt-4 pb-4 px-4">
+                  <p className="text-[10px] uppercase tracking-wider text-muted-foreground font-medium">Km/dia</p>
+                  <p className="text-2xl font-bold mt-1">
+                    {summary.kmPerDay.toLocaleString("pt-BR", { maximumFractionDigits: 0 })}
+                  </p>
+                  <p className="text-[10px] text-muted-foreground mt-0.5">média rodada</p>
+                </CardContent>
+              </Card>
+              <Card>
+                <CardContent className="pt-4 pb-4 px-4">
+                  <p className="text-[10px] uppercase tracking-wider text-muted-foreground font-medium">Viagens/dia</p>
+                  <p className="text-2xl font-bold mt-1">{summary.tripsPerDay.toFixed(2)}</p>
+                  <p className="text-[10px] text-muted-foreground mt-0.5">cadência</p>
+                </CardContent>
+              </Card>
+              <Card>
+                <CardContent className="pt-4 pb-4 px-4">
+                  <p className="text-[10px] uppercase tracking-wider text-muted-foreground font-medium">R$/km</p>
+                  <p className="text-2xl font-bold mt-1">{fmt(summary.revenuePerKm)}</p>
+                  <p className="text-[10px] text-muted-foreground mt-0.5">receita por km</p>
+                </CardContent>
+              </Card>
+              <Card>
+                <CardContent className="pt-4 pb-4 px-4">
+                  <p className="text-[10px] uppercase tracking-wider text-muted-foreground font-medium">Combustível</p>
+                  <p className={`text-2xl font-bold mt-1 ${
+                    summary.fuelPctOfRevenue > 30 ? "text-red-400" :
+                    summary.fuelPctOfRevenue > 20 ? "text-amber-400" : "text-foreground"
+                  }`}>
+                    {fmtPct(summary.fuelPctOfRevenue)}
+                  </p>
+                  <p className="text-[10px] text-muted-foreground mt-0.5">{fmtShort(summary.fuelCost)} da receita</p>
                 </CardContent>
               </Card>
             </div>
@@ -420,6 +533,106 @@ export function MotoristaClient({ drivers, freights }: { drivers: DriverNode[]; 
             </CardContent>
           </Card>
         </>
+      )}
+
+      {/* Ranking comparativo (sem motorista selecionado) */}
+      {!selectedDriverId && byDriver.length > 0 && (
+        <Card>
+          <CardHeader>
+            <div className="flex items-center justify-between">
+              <div>
+                <CardTitle className="flex items-center gap-2">
+                  <Trophy className="h-5 w-5 text-primary" /> Ranking de motoristas
+                </CardTitle>
+                <CardDescription>
+                  Performance no período · click numa linha para ver o detalhe
+                </CardDescription>
+              </div>
+              <Badge variant="outline" className="text-xs">
+                {byDriver.length} com viagens
+              </Badge>
+            </div>
+          </CardHeader>
+          <CardContent>
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>#</TableHead>
+                  <TableHead>Motorista</TableHead>
+                  <TableHead className="text-right">Viagens</TableHead>
+                  <TableHead className="text-right">Dias</TableHead>
+                  <TableHead className="text-right">Km</TableHead>
+                  <TableHead className="text-right">Receita</TableHead>
+                  <TableHead className="text-right">Custos</TableHead>
+                  <TableHead className="text-right">Resultado</TableHead>
+                  <TableHead className="text-right">Margem</TableHead>
+                  <TableHead className="text-right">R$/km</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {[...byDriver]
+                  .sort((a, b) => b.result - a.result)
+                  .map((d, i) => (
+                    <TableRow
+                      key={d.id}
+                      className="cursor-pointer hover:bg-accent/50"
+                      onClick={() => {
+                        setSelectedDriverId(d.id);
+                        window.scrollTo({ top: 0, behavior: "smooth" });
+                      }}
+                    >
+                      <TableCell className="text-xs text-muted-foreground font-mono">
+                        {i + 1}
+                      </TableCell>
+                      <TableCell className="text-sm font-medium max-w-[200px] truncate">
+                        {d.name}
+                      </TableCell>
+                      <TableCell className="text-right text-xs font-mono">{d.trips}</TableCell>
+                      <TableCell className="text-right text-xs font-mono">{d.days}</TableCell>
+                      <TableCell className="text-right text-xs font-mono">
+                        {d.km > 0 ? d.km.toLocaleString("pt-BR") : "—"}
+                      </TableCell>
+                      <TableCell className="text-right text-xs font-mono">
+                        {fmt(d.revenue)}
+                      </TableCell>
+                      <TableCell className="text-right text-xs font-mono text-red-400/80">
+                        {fmt(d.costs)}
+                      </TableCell>
+                      <TableCell
+                        className={`text-right text-xs font-mono font-bold ${
+                          d.result >= 0 ? "text-emerald-400" : "text-red-400"
+                        }`}
+                      >
+                        {fmt(d.result)}
+                      </TableCell>
+                      <TableCell className="text-right">
+                        <Badge
+                          variant="outline"
+                          className={`text-[10px] font-mono ${
+                            d.marginPct >= 20
+                              ? "bg-emerald-500/15 text-emerald-400 border-emerald-500/30"
+                              : d.marginPct >= 0
+                              ? "bg-amber-500/15 text-amber-400 border-amber-500/30"
+                              : "bg-red-500/15 text-red-400 border-red-500/30"
+                          }`}
+                        >
+                          {d.marginPct >= 0 ? (
+                            <TrendingUp className="h-2.5 w-2.5 mr-0.5" />
+                          ) : (
+                            <TrendingDown className="h-2.5 w-2.5 mr-0.5" />
+                          )}
+                          {fmtPct(d.marginPct)}
+                        </Badge>
+                      </TableCell>
+                      <TableCell className="text-right text-xs font-mono text-muted-foreground">
+                        {d.km > 0 ? fmt(d.revenuePerKm) : "—"}
+                      </TableCell>
+                    </TableRow>
+                  ))}
+              </TableBody>
+            </Table>
+          </CardContent>
+        </Card>
       )}
 
       {/* Driver List */}
