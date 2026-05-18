@@ -4,13 +4,10 @@ import { useState, useMemo } from "react";
 import {
   Truck,
   DollarSign,
-  TrendingUp,
   ArrowUpRight,
   ArrowDownRight,
-  Weight,
 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
 import {
   Select,
   SelectContent,
@@ -75,18 +72,9 @@ export function DashboardClient({ freights: allFreights, occurrences: allOccurre
     return allFreights.filter((f) => f.serviceAt.startsWith(selectedMonth));
   }, [allFreights, selectedMonth]);
 
-  const occurrences = useMemo(() => {
-    if (selectedMonth === "all") return allOccurrences;
-    return allOccurrences.filter((o) => o.occurrence_at.startsWith(selectedMonth));
-  }, [allOccurrences, selectedMonth]);
-
   // Compute KPIs
   const totalRevenue = margins.reduce((s, m) => s + parseFloat(m.freight_total), 0);
   const totalExpenses = margins.reduce((s, m) => s + parseFloat(m.total_expenses), 0);
-  const totalMargin = margins.reduce((s, m) => s + parseFloat(m.margin_total), 0);
-  const totalWeight = margins.reduce((s, m) => s + parseFloat(m.real_weight), 0);
-  const avgMarginPct = margins.length > 0
-    ? margins.reduce((s, m) => s + parseFloat(m.margin_percentual), 0) / margins.length : 0;
 
   const statusCounts: Record<string, number> = {};
   freights.forEach((f) => { statusCounts[f.status] = (statusCounts[f.status] || 0) + 1; });
@@ -185,27 +173,6 @@ export function DashboardClient({ freights: allFreights, occurrences: allOccurre
           </CardContent>
         </Card>
 
-        <Card className={`border-l-4 ${totalMargin >= 0 ? "border-l-blue-500" : "border-l-red-500"}`}>
-          <CardHeader className="flex flex-row items-center justify-between pb-1">
-            <CardTitle className="text-sm font-bold uppercase tracking-wide text-blue-400">Margem</CardTitle>
-            <TrendingUp className="h-5 w-5 text-blue-500/60" />
-          </CardHeader>
-          <CardContent>
-            <div className={`text-4xl font-extrabold ${totalMargin >= 0 ? "text-blue-400" : "text-red-400"}`}>{fmt(totalMargin)}</div>
-            <Badge variant={avgMarginPct > 50 ? "secondary" : "outline"} className="text-xs mt-1">{avgMarginPct.toFixed(1)}% media</Badge>
-          </CardContent>
-        </Card>
-
-        <Card className="border-l-4 border-l-violet-500">
-          <CardHeader className="flex flex-row items-center justify-between pb-1">
-            <CardTitle className="text-sm font-bold uppercase tracking-wide text-violet-400">Peso Total</CardTitle>
-            <Weight className="h-5 w-5 text-violet-500/60" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-4xl font-extrabold text-violet-400">{(totalWeight / 1000).toFixed(0)}t</div>
-            <p className="text-xs text-muted-foreground mt-1">{occurrences.length} ocorrencias</p>
-          </CardContent>
-        </Card>
       </div>
 
       {/* Charts */}

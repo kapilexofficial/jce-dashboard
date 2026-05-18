@@ -276,7 +276,6 @@ export function DreClient({
       costs,
       marginPct: revenue > 0 ? (result / revenue) * 100 : 0,
       revenuePerKm: km > 0 ? revenue / km : 0,
-      revenuePerTon: weight > 0 ? revenue / (weight / 1000) : 0,
       fuelPctOfRevenue: revenue > 0 ? (fuel / revenue) * 100 : 0,
       profitPerDay: result / days,
       days,
@@ -516,17 +515,6 @@ export function DreClient({
             <CardContent>
               <div className="text-2xl font-bold">{fmtCurrency(vehicleSummary.revenuePerKm)}</div>
               <p className="text-[11px] text-muted-foreground mt-0.5">receita por km rodado</p>
-            </CardContent>
-          </Card>
-          <Card>
-            <CardHeader className="pb-2">
-              <CardTitle className="text-xs font-medium uppercase tracking-wider text-muted-foreground flex items-center gap-1.5">
-                <Weight className="h-3.5 w-3.5" /> R$/ton
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold">{fmtCurrency(vehicleSummary.revenuePerTon)}</div>
-              <p className="text-[11px] text-muted-foreground mt-0.5">receita por tonelada</p>
             </CardContent>
           </Card>
           <Card>
