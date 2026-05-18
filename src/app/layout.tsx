@@ -5,6 +5,7 @@ import { AppSidebar } from "@/components/app-sidebar";
 import { SidebarProvider, SidebarInset, SidebarTrigger } from "@/components/ui/sidebar";
 import { Separator } from "@/components/ui/separator";
 import { RefreshButton } from "@/components/refresh-button";
+import { LastSyncBadge } from "@/components/last-sync-badge";
 
 const inter = Inter({
   variable: "--font-sans",
@@ -34,7 +35,8 @@ export default function RootLayout({
               <span className="text-xs font-medium text-muted-foreground tracking-wide uppercase">
                 J.C.E Transportes
               </span>
-              <div className="ml-auto">
+              <div className="ml-auto flex items-center gap-3">
+                <LastSyncBadge />
                 <RefreshButton />
               </div>
             </header>

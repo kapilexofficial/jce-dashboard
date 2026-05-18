@@ -55,8 +55,26 @@ async function post(xml: string): Promise<string> {
       `Trucks Control HTTP ${res.status} ${res.statusText}: ${body.slice(0, 200)}`
     );
   }
-  const buf = new Uint8Array(await res.arrayBuffer());
-  return decompress(buf);
+  const ab = await res.arrayBuffer();
+  if (!ab || ab.byteLength === 0) {
+    throw new Error(`Trucks Control: resposta vazia (Content-Length=${res.headers.get("content-length") ?? "?"})`);
+  }
+  let buf: Uint8Array;
+  try {
+    buf = new Uint8Array(ab);
+  } catch (e) {
+    throw new Error(
+      `Trucks Control: falha allocando Uint8Array (byteLength=${ab.byteLength}): ${e instanceof Error ? e.message : e}`
+    );
+  }
+  try {
+    return decompress(buf);
+  } catch (e) {
+    const head = [...buf.slice(0, 16)].map((b) => b.toString(16).padStart(2, "0")).join(" ");
+    throw new Error(
+      `Trucks Control: decompress falhou (len=${buf.length}, head=[${head}]): ${e instanceof Error ? e.message : e}`
+    );
+  }
 }
 
 function asArray<T>(v: T | T[] | undefined | null): T[] {
