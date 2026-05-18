@@ -15,6 +15,7 @@ import {
   Wrench,
   Gauge,
   Activity,
+  Route,
 } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
@@ -53,6 +54,8 @@ const navItems = [
     group: "Analise",
     items: [
       { title: "Analise Fretes", href: "/analise-fretes", icon: Activity },
+      { title: "Analise Veiculo", href: "/analise-veiculo", icon: Truck },
+      { title: "R$/KM por Placa", href: "/analise-rs-km", icon: Route },
       { title: "Analise Clientes", href: "/clientes", icon: PieChart },
       { title: "Performance", href: "/performance", icon: Users },
       { title: "DRE Veiculo", href: "/dre", icon: Receipt },
