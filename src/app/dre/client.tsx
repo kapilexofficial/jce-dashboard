@@ -43,6 +43,12 @@ import {
 } from "@/components/ui/chart";
 import type { VehicleRest, FreightDreNode, FreightMargin } from "@/lib/esl-api";
 
+export interface TcKmEntry {
+  placa: string;
+  dia: string;
+  km: number;
+}
+
 function fmtCurrency(v: number) {
   return new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(v);
 }
@@ -65,10 +71,12 @@ export function DreClient({
   vehicles,
   freights,
   margins,
+  tcKm,
 }: {
   vehicles: VehicleRest[];
   freights: FreightDreNode[];
   margins: FreightMargin[];
+  tcKm: TcKmEntry[];
 }) {
   const today = new Date().toISOString().split("T")[0];
   const yearStart = `${new Date().getFullYear()}-01-01`;
@@ -82,6 +90,17 @@ export function DreClient({
   const freightsWithVehicle = useMemo(() => {
     return freights.filter((f) => f.lastManifest?.vehicle?.licensePlate);
   }, [freights]);
+
+  // KM rodado por placa no período selecionado, vindo do Trucks Control (Supabase)
+  // FONTE DE VERDADE — substitui manifest.km que é o KM "contratado" do frete
+  const tcKmByPlateInPeriod = useMemo(() => {
+    const map = new Map<string, number>();
+    for (const r of tcKm) {
+      if (r.dia < dateStart || r.dia > dateEnd) continue;
+      map.set(r.placa, (map.get(r.placa) || 0) + r.km);
+    }
+    return map;
+  }, [tcKm, dateStart, dateEnd]);
 
   // Unique plates from freights
   const platesInUse = useMemo(() => {
@@ -257,7 +276,8 @@ export function DreClient({
       return s + (m.freightSubtotal || 0) + (m.deliverySubtotal || 0) + (m.pickSubtotal || 0) +
         (m.fuelSubtotal || 0) + (m.tollSubtotal || 0) + (m.dailySubtotal || 0) + (m.expensesSubtotal || 0);
     }, 0);
-    const km = data.reduce((s, f) => s + (f.lastManifest?.km || 0), 0);
+    // KM agora vem do Trucks Control (rastreador) em vez de manifest.km (contratado)
+    const km = selectedPlate ? (tcKmByPlateInPeriod.get(selectedPlate) || 0) : 0;
     const weight = data.reduce((s, f) => s + f.realWeight, 0);
     const result = revenue - costs;
     const days = Math.max(
@@ -280,7 +300,7 @@ export function DreClient({
       profitPerDay: result / days,
       days,
     };
-  }, [selectedPlate, filteredFreights, dateStart, dateEnd]);
+  }, [selectedPlate, filteredFreights, dateStart, dateEnd, tcKmByPlateInPeriod]);
 
   // Aggregation per vehicle (for ranking)
   type VehicleAgg = {
@@ -328,16 +348,21 @@ export function DreClient({
         (m.tollSubtotal || 0) +
         (m.dailySubtotal || 0) +
         (m.expensesSubtotal || 0);
-      v.km += m.km || 0;
+      // KM somado no map, mas depois sobrescreve com Trucks Control real (mais preciso)
       v.weight += f.realWeight || 0;
     });
-    return [...map.values()].map((v) => ({
-      ...v,
-      result: v.revenue - v.costs,
-      marginPct: v.revenue > 0 ? ((v.revenue - v.costs) / v.revenue) * 100 : 0,
-      revenuePerKm: v.km > 0 ? v.revenue / v.km : 0,
-    }));
-  }, [freightsWithVehicle, dateStart, dateEnd]);
+    // KM real do rastreador vindo do Supabase substitui o valor agregado dos manifestos
+    return [...map.values()].map((v) => {
+      const kmReal = tcKmByPlateInPeriod.get(v.plate) || 0;
+      return {
+        ...v,
+        km: kmReal,
+        result: v.revenue - v.costs,
+        marginPct: v.revenue > 0 ? ((v.revenue - v.costs) / v.revenue) * 100 : 0,
+        revenuePerKm: kmReal > 0 ? v.revenue / kmReal : 0,
+      };
+    });
+  }, [freightsWithVehicle, dateStart, dateEnd, tcKmByPlateInPeriod]);
 
   // Monthly evolution for selected vehicle
   const vehicleMonthly = useMemo(() => {

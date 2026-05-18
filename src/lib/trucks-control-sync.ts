@@ -85,6 +85,12 @@ async function syncVehicles(sb: SB): Promise<{ count: number; error?: string }> 
 }
 
 async function shouldSyncVehicles(sb: SB): Promise<boolean> {
+  // Se tc_vehicles está vazia, força sync independente do intervalo
+  const { count } = await sb
+    .from("tc_vehicles")
+    .select("vei_id", { count: "exact", head: true });
+  if (!count || count === 0) return true;
+
   const { data } = await sb
     .from("tc_sync_state")
     .select("value_timestamptz")
