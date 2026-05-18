@@ -32,6 +32,13 @@ export interface PositionPoint {
   lat: number;
   lng: number;
   location: string;
+  ecoScore: number;
+  harshBrake: number;
+  harshAccel: number;
+  idleTime: number; // segundos
+  coastTime: number; // segundos
+  maxSpeed: number;
+  maxRpm: number;
 }
 
 export interface VehicleHistory {
@@ -83,6 +90,39 @@ interface VehicleMetrics {
   latLast: number;
   lngLast: number;
   locationLast: string;
+  ecoScore: number; // 0-100, valor mais recente Elithium
+  notaTelemetria: number; // 0-100, calculada a partir de freadas/idle/etc
+}
+
+// Penalidades pra Nota Telemetria, normalizadas por 100km rodados
+const PEN_HARSH_BRAKE = 2;
+const PEN_HARSH_ACCEL = 2;
+const PEN_IDLE_PER_HOUR = 3;
+const PEN_COAST_PER_HOUR = 1;
+const PEN_OVER_SPEED = 5; // flag única se maxSpeed > 90
+const PEN_OVER_RPM = 5; // flag única se maxRpm > 2200
+const SPEED_LIMIT = 90;
+const RPM_LIMIT = 2200;
+
+function computeNotaTelemetria(
+  harshBrakeDelta: number,
+  harshAccelDelta: number,
+  idleSecondsDelta: number,
+  coastSecondsDelta: number,
+  maxSpeedObs: number,
+  maxRpmObs: number,
+  kmRodados: number
+): number {
+  if (kmRodados <= 0) return 0;
+  const per100 = 100 / kmRodados;
+  let penalty = 0;
+  penalty += harshBrakeDelta * PEN_HARSH_BRAKE * per100;
+  penalty += harshAccelDelta * PEN_HARSH_ACCEL * per100;
+  penalty += (idleSecondsDelta / 3600) * PEN_IDLE_PER_HOUR;
+  penalty += (coastSecondsDelta / 3600) * PEN_COAST_PER_HOUR;
+  if (maxSpeedObs > SPEED_LIMIT) penalty += PEN_OVER_SPEED;
+  if (maxRpmObs > RPM_LIMIT) penalty += PEN_OVER_RPM;
+  return Math.max(0, Math.min(100, 100 - penalty));
 }
 
 function computeMetrics(v: VehicleHistory, startTs: number, endTs: number): VehicleMetrics | null {
@@ -98,6 +138,17 @@ function computeMetrics(v: VehicleHistory, startTs: number, endTs: number): Vehi
   const kmRodados = Math.max(0, last.odometer - first.odometer);
   const litros = Math.max(0, last.fuelTotal - first.fuelTotal);
   const kml = litros > 0 ? kmRodados / litros : 0;
+
+  const harshBrakeDelta = Math.max(0, last.harshBrake - first.harshBrake);
+  const harshAccelDelta = Math.max(0, last.harshAccel - first.harshAccel);
+  const idleDelta = Math.max(0, last.idleTime - first.idleTime);
+  const coastDelta = Math.max(0, last.coastTime - first.coastTime);
+  const maxSpeedObs = inRange.reduce((m, p) => Math.max(m, p.maxSpeed), 0);
+  const maxRpmObs = inRange.reduce((m, p) => Math.max(m, p.maxRpm), 0);
+  const ecoScore = last.ecoScore || 0;
+  const notaTelemetria = computeNotaTelemetria(
+    harshBrakeDelta, harshAccelDelta, idleDelta, coastDelta, maxSpeedObs, maxRpmObs, kmRodados
+  );
 
   return {
     plate: v.plate,
@@ -119,6 +170,8 @@ function computeMetrics(v: VehicleHistory, startTs: number, endTs: number): Vehi
     latLast: last.lat,
     lngLast: last.lng,
     locationLast: last.location,
+    ecoScore,
+    notaTelemetria,
   };
 }
 
@@ -162,7 +215,15 @@ export function TelemetriaClient({ vehicles }: { vehicles: VehicleHistory[] }) {
   const totalKm = displayMetrics.reduce((s, v) => s + v.kmRodados, 0);
   const totalLiters = displayMetrics.reduce((s, v) => s + v.litros, 0);
   const avgKml = totalLiters > 0 ? totalKm / totalLiters : 0;
-  const ignitionOn = displayMetrics.filter((v) => v.ignitionLast).length;
+
+  const ecoVehicles = displayMetrics.filter((v) => v.ecoScore > 0);
+  const avgEcoScore = ecoVehicles.length > 0
+    ? ecoVehicles.reduce((s, v) => s + v.ecoScore, 0) / ecoVehicles.length
+    : 0;
+  const teleVehicles = displayMetrics.filter((v) => v.notaTelemetria > 0);
+  const avgNotaTelemetria = teleVehicles.length > 0
+    ? teleVehicles.reduce((s, v) => s + v.notaTelemetria, 0) / teleVehicles.length
+    : 0;
 
   const ranking = useMemo(
     () => [...displayMetrics].filter((v) => v.kml > 0).sort((a, b) => b.kml - a.kml),
@@ -358,7 +419,7 @@ export function TelemetriaClient({ vehicles }: { vehicles: VehicleHistory[] }) {
         </CardContent>
       </Card>
 
-      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-5">
+      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-6">
         <Card className="border-l-4 border-l-primary">
           <CardHeader className="pb-1">
             <CardTitle className="text-sm font-bold uppercase tracking-wide text-primary">Km/l médio</CardTitle>
@@ -395,13 +456,29 @@ export function TelemetriaClient({ vehicles }: { vehicles: VehicleHistory[] }) {
             <p className="text-xs text-muted-foreground mt-1">com dados no período</p>
           </CardContent>
         </Card>
-        <Card className="border-l-4 border-l-sky-500">
+        <Card className="border-l-4 border-l-sky-500" title="Nota ECO Elithium — média da frota">
           <CardHeader className="pb-1">
-            <CardTitle className="text-sm font-bold uppercase tracking-wide text-sky-400">Ignição ligada</CardTitle>
+            <CardTitle className="text-sm font-bold uppercase tracking-wide text-sky-400">Nota ECO</CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="text-3xl font-extrabold">{ignitionOn}</div>
-            <p className="text-xs text-muted-foreground mt-1 flex items-center gap-1"><Activity className="h-3 w-3" /> agora</p>
+            <div className={`text-3xl font-extrabold ${
+              avgEcoScore >= 80 ? "text-emerald-400" : avgEcoScore >= 60 ? "text-amber-400" : avgEcoScore > 0 ? "text-red-400" : ""
+            }`}>{avgEcoScore > 0 ? fmt(avgEcoScore, 0) : "—"}</div>
+            <p className="text-xs text-muted-foreground mt-1 flex items-center gap-1"><TrendingUp className="h-3 w-3" /> {ecoVehicles.length} veículos</p>
+          </CardContent>
+        </Card>
+        <Card
+          className="border-l-4 border-l-fuchsia-500"
+          title="Nota Telemetria calculada — 100 menos penalidades por freadas/acelerações bruscas (2pts/100km), idle (3pts/h), banguela (1pt/h), velocidade máx > 90 (-5), RPM máx > 2200 (-5)"
+        >
+          <CardHeader className="pb-1">
+            <CardTitle className="text-sm font-bold uppercase tracking-wide text-fuchsia-400">Nota Telem.</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className={`text-3xl font-extrabold ${
+              avgNotaTelemetria >= 80 ? "text-emerald-400" : avgNotaTelemetria >= 60 ? "text-amber-400" : avgNotaTelemetria > 0 ? "text-red-400" : ""
+            }`}>{avgNotaTelemetria > 0 ? fmt(avgNotaTelemetria, 0) : "—"}</div>
+            <p className="text-xs text-muted-foreground mt-1 flex items-center gap-1"><Activity className="h-3 w-3" /> {teleVehicles.length} veículos</p>
           </CardContent>
         </Card>
       </div>

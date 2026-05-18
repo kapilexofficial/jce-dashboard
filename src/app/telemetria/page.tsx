@@ -58,6 +58,13 @@ export default async function TelemetriaPage() {
         lat: p.Latitude,
         lng: p.Longitude,
         location: p.DistanceFromGeographicArea || "",
+        ecoScore: Number(tel[TELEMETRY_IDS.ECO_SCORE] || 0),
+        harshBrake: Number(tel[TELEMETRY_IDS.HARSH_BRAKE] || 0),
+        harshAccel: Number(tel[TELEMETRY_IDS.HARSH_ACCEL] || 0),
+        idleTime: Number(tel[TELEMETRY_IDS.IDLE_TIME] || 0),
+        coastTime: Number(tel[TELEMETRY_IDS.COAST_TIME] || 0),
+        maxSpeed: Number(tel[TELEMETRY_IDS.MAX_SPEED] || 0),
+        maxRpm: Number(tel[TELEMETRY_IDS.MAX_RPM] || 0),
       };
     });
 

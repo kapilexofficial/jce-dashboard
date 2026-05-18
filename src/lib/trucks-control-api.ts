@@ -1,4 +1,5 @@
-import { unzipSync, gunzipSync, strFromU8 } from "fflate";
+import AdmZip from "adm-zip";
+import { gunzipSync } from "node:zlib";
 import { XMLParser } from "fast-xml-parser";
 
 const BASE_URL =
@@ -24,19 +25,20 @@ function escapeXml(s: string): string {
 }
 
 function decompress(data: Uint8Array): string {
-  // ZIP (PKZIP archive): 50 4B 03 04
-  if (data.length >= 4 && data[0] === 0x50 && data[1] === 0x4b) {
-    const files = unzipSync(data);
-    const entries = Object.entries(files);
+  const buf = Buffer.from(data.buffer, data.byteOffset, data.byteLength);
+  // ZIP (PKZIP archive, suporta ZIP64): 50 4B 03 04
+  if (buf.length >= 4 && buf[0] === 0x50 && buf[1] === 0x4b) {
+    const zip = new AdmZip(buf);
+    const entries = zip.getEntries();
     if (entries.length === 0) throw new Error("Trucks Control: zip response empty");
-    return strFromU8(entries[0][1]);
+    return entries[0].getData().toString("utf-8");
   }
   // GZIP: 1F 8B
-  if (data.length >= 2 && data[0] === 0x1f && data[1] === 0x8b) {
-    return strFromU8(gunzipSync(data));
+  if (buf.length >= 2 && buf[0] === 0x1f && buf[1] === 0x8b) {
+    return gunzipSync(buf).toString("utf-8");
   }
   // Não comprimido (ex: erros HTTP em texto puro)
-  return strFromU8(data);
+  return buf.toString("utf-8");
 }
 
 async function post(xml: string): Promise<string> {
