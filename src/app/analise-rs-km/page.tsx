@@ -108,14 +108,19 @@ export default async function AnaliseRsKmPage({ searchParams }: PageProps) {
   const mes = params.mes || defaultMonth();
   const { gte, lte } = monthBounds(mes);
 
-  const [freights, kmDailyRows] = await Promise.all([
-    queryAllFreightsForDre(
-      { serviceAt: { gte, lte } },
-      50,
-      { revalidate: 300, tags: ["freights"] }
-    ).catch(() => [] as FreightDreNode[]),
+  // ESL GraphQL não aceita serviceAt: { gte, lte } como param do FreightInput —
+  // o filtro silenciosamente é ignorado e a query retorna fretes recentes.
+  // Padrão do projeto: buscar fretes e filtrar in-memory pela data.
+  const [allFreights, kmDailyRows] = await Promise.all([
+    queryAllFreightsForDre({}, 30, { revalidate: 300, tags: ["freights"] })
+      .catch(() => [] as FreightDreNode[]),
     fetchKmDaily(mes),
   ]);
+
+  const freights = allFreights.filter((f) => {
+    const date = f.serviceAt.split("T")[0];
+    return date >= gte && date <= lte;
+  });
 
   // Group km daily by placa
   const kmDailyByPlate = new Map<string, Map<string, number>>();

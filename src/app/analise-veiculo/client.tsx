@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { Fragment, useState, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import { Truck, DollarSign, Route, TrendingUp, Activity, Fuel, ChevronDown, ChevronRight, AlertCircle } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -217,9 +217,8 @@ export function AnaliseVeiculoClient({ rows, mes, monthsAvailable, hasTcData }: 
               {filteredRows.map((r) => {
                 const isExpanded = expanded === r.placa;
                 return (
-                  <>
+                  <Fragment key={r.placa}>
                     <TableRow
-                      key={r.placa}
                       className="cursor-pointer hover:bg-muted/50"
                       onClick={() => setExpanded(isExpanded ? null : r.placa)}
                     >
@@ -247,7 +246,7 @@ export function AnaliseVeiculoClient({ rows, mes, monthsAvailable, hasTcData }: 
                       </TableCell>
                     </TableRow>
                     {isExpanded && (
-                      <TableRow key={`${r.placa}-detail`} className="bg-muted/20 hover:bg-muted/20">
+                      <TableRow className="bg-muted/20 hover:bg-muted/20">
                         <TableCell></TableCell>
                         <TableCell colSpan={9} className="py-4">
                           <div className="text-xs text-muted-foreground space-y-2">
@@ -284,7 +283,7 @@ export function AnaliseVeiculoClient({ rows, mes, monthsAvailable, hasTcData }: 
                         </TableCell>
                       </TableRow>
                     )}
-                  </>
+                  </Fragment>
                 );
               })}
             </TableBody>

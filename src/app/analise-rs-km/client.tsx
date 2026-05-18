@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { Fragment, useState, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import { Route, DollarSign, TrendingUp, ChevronDown, ChevronRight, AlertCircle } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -194,9 +194,8 @@ export function AnaliseRsKmClient({ rows, mes, monthsAvailable, hasTcData }: Pro
               {filteredRows.map((r, idx) => {
                 const isExpanded = expanded === r.placa;
                 return (
-                  <>
+                  <Fragment key={r.placa}>
                     <TableRow
-                      key={r.placa}
                       className="cursor-pointer hover:bg-muted/50"
                       onClick={() => setExpanded(isExpanded ? null : r.placa)}
                     >
@@ -217,7 +216,7 @@ export function AnaliseRsKmClient({ rows, mes, monthsAvailable, hasTcData }: Pro
                       <TableCell className="text-right text-muted-foreground">{r.diasComDado}</TableCell>
                     </TableRow>
                     {isExpanded && (
-                      <TableRow key={`${r.placa}-detail`} className="bg-muted/20 hover:bg-muted/20">
+                      <TableRow className="bg-muted/20 hover:bg-muted/20">
                         <TableCell></TableCell>
                         <TableCell colSpan={6} className="py-4">
                           <p className="text-xs text-muted-foreground mb-2">Detalhe diário — {r.placa}</p>
@@ -246,7 +245,7 @@ export function AnaliseRsKmClient({ rows, mes, monthsAvailable, hasTcData }: Pro
                         </TableCell>
                       </TableRow>
                     )}
-                  </>
+                  </Fragment>
                 );
               })}
             </TableBody>

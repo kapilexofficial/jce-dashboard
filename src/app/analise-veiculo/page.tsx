@@ -160,16 +160,20 @@ export default async function AnaliseVeiculoPage({ searchParams }: PageProps) {
   const mes = params.mes || defaultMonth();
   const { gte, lte, monthStart } = monthBounds(mes);
 
-  const [freights, vehicles, positionsByPlate, kmByPlate] = await Promise.all([
-    queryAllFreightsForDre(
-      { serviceAt: { gte, lte } },
-      50,
-      { revalidate: 300, tags: ["freights"] }
-    ).catch(() => [] as FreightDreNode[]),
+  // ESL GraphQL ignora silenciosamente serviceAt: { gte, lte } no FreightInput —
+  // filtramos in-memory pela data, padrão do resto do projeto (vide /dre).
+  const [allFreights, vehicles, positionsByPlate, kmByPlate] = await Promise.all([
+    queryAllFreightsForDre({}, 30, { revalidate: 300, tags: ["freights"] })
+      .catch(() => [] as FreightDreNode[]),
     getVehicles().catch(() => [] as VehicleRest[]),
     getAllFleetPositionsGrouped().catch(() => ({} as Record<string, PositionRecord[]>)),
     fetchTcKm(monthStart),
   ]);
+
+  const freights = allFreights.filter((f) => {
+    const date = f.serviceAt.split("T")[0];
+    return date >= gte && date <= lte;
+  });
 
   const rows = aggregate(vehicles, freights, positionsByPlate, kmByPlate);
 
