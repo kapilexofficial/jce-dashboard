@@ -6,7 +6,12 @@ export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
 
-const KNOWN_TAGS = ["freights", "margins", "occurrences", "tc_km", "tc_vehicles"];
+const KNOWN_TAGS = [
+  "esl",          // catch-all p/ chamadas ESL sem tag específica (default 24h)
+  "freights", "margins", "occurrences", "service-orders",
+  "elithium",     // posições/telemetria Elithium
+  "tc_km", "tc_vehicles",  // Trucks Control
+];
 
 export async function POST() {
   // Invalidação de cache imediata (rápido)

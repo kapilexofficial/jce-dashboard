@@ -6,7 +6,7 @@ import { FretesClient } from "./client";
 export default async function FretesPage() {
   let freights: FreightNode[] = [];
   try {
-    freights = await queryAllFreights({}, 50, { revalidate: 300, tags: ["freights"] });
+    freights = await queryAllFreights({}, 50, { revalidate: 86400, tags: ["freights"] });
   } catch (error) {
     console.error("Erro ao buscar fretes:", error);
   }

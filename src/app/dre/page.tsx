@@ -34,7 +34,7 @@ export default async function DrePage() {
   const yearStart = `${new Date().getFullYear()}-01-01`;
 
   try {
-    const cacheOpts = { revalidate: 300, tags: ["freights"] };
+    const cacheOpts = { revalidate: 86400, tags: ["freights"] };
     [vehicles, freights, margins, tcKm] = await Promise.all([
       getVehicles().catch(() => []),
       queryAllFreightsForDre({}, 30, cacheOpts).catch(() => []),

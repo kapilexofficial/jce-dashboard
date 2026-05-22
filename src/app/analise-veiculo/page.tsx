@@ -163,7 +163,7 @@ export default async function AnaliseVeiculoPage({ searchParams }: PageProps) {
   // ESL GraphQL ignora silenciosamente serviceAt: { gte, lte } no FreightInput —
   // filtramos in-memory pela data, padrão do resto do projeto (vide /dre).
   const [allFreights, vehicles, positionsByPlate, kmByPlate] = await Promise.all([
-    queryAllFreightsForDre({}, 30, { revalidate: 300, tags: ["freights"] })
+    queryAllFreightsForDre({}, 30, { revalidate: 86400, tags: ["freights"] })
       .catch(() => [] as FreightDreNode[]),
     getVehicles().catch(() => [] as VehicleRest[]),
     getAllFleetPositionsGrouped().catch(() => ({} as Record<string, PositionRecord[]>)),

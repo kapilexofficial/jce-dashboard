@@ -7,7 +7,7 @@ export default async function AnaliseFretesPage() {
   let freights: FreightAnalysisNode[] = [];
   try {
     freights = await queryAllFreightsForAnalysis(50, {
-      revalidate: 300,
+      revalidate: 86400,
       tags: ["freights"],
     });
   } catch (error) {

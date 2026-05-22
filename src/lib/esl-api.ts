@@ -4,6 +4,12 @@ const DATA_EXPORT_TOKEN = process.env.ESL_DATA_EXPORT_TOKEN || TOKEN;
 const GRAPHQL_URL = process.env.ESL_GRAPHQL_URL || `${BASE_URL}/graphql`;
 const GRAPHQL_TOKEN = process.env.ESL_GRAPHQL_TOKEN || TOKEN;
 
+// Cache 24h por padrão pra todas chamadas ESL — JCE tem cota mensal de
+// requisições no contrato. Botão "Atualizar" invalida via tag "esl"
+// (vide /api/refresh + /api/revalidate). Pages com tags próprias
+// (freights/margins/occurrences) também são invalidadas pelo botão.
+export const ESL_CACHE_TTL = 24 * 3600; // 24h
+
 async function request<T>(
   path: string,
   options?: RequestInit & {
@@ -21,6 +27,8 @@ async function request<T>(
   const { cacheOpts, params: _, ...rest } = options || {};
   void _;
 
+  const cache = cacheOpts ?? { revalidate: ESL_CACHE_TTL, tags: ["esl"] };
+
   const res = await fetch(url.toString(), {
     ...rest,
     headers: {
@@ -28,9 +36,7 @@ async function request<T>(
       "Content-Type": "application/json",
       ...options?.headers,
     },
-    ...(cacheOpts
-      ? { next: { revalidate: cacheOpts.revalidate, tags: cacheOpts.tags } }
-      : { cache: "no-store" as RequestCache }),
+    next: { revalidate: cache.revalidate, tags: cache.tags },
   });
 
   if (!res.ok) {
@@ -45,6 +51,7 @@ async function graphql<T>(
   variables?: Record<string, unknown>,
   cacheOpts?: { revalidate: number; tags: string[] }
 ): Promise<T> {
+  const cache = cacheOpts ?? { revalidate: ESL_CACHE_TTL, tags: ["esl"] };
   const res = await fetch(GRAPHQL_URL, {
     method: "POST",
     headers: {
@@ -52,9 +59,7 @@ async function graphql<T>(
       "Content-Type": "application/json",
     },
     body: JSON.stringify({ query, variables }),
-    ...(cacheOpts
-      ? { next: { revalidate: cacheOpts.revalidate, tags: cacheOpts.tags } }
-      : { cache: "no-store" as RequestCache }),
+    next: { revalidate: cache.revalidate, tags: cache.tags },
   });
 
   if (!res.ok) {
@@ -217,7 +222,7 @@ export async function getFleetServiceOrders(
   const url = `${BASE_URL}/api/analytics/reports/6573/data?${qs}`;
   const res = await fetch(url, {
     headers: { Authorization: `Bearer ${DATA_EXPORT_TOKEN}` },
-    next: { revalidate: 300 },
+    next: { revalidate: ESL_CACHE_TTL, tags: ["esl", "service-orders"] },
   });
   if (!res.ok) {
     const body = await res.text();

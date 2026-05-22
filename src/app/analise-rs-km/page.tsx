@@ -112,7 +112,7 @@ export default async function AnaliseRsKmPage({ searchParams }: PageProps) {
   // o filtro silenciosamente é ignorado e a query retorna fretes recentes.
   // Padrão do projeto: buscar fretes e filtrar in-memory pela data.
   const [allFreights, kmDailyRows] = await Promise.all([
-    queryAllFreightsForDre({}, 30, { revalidate: 300, tags: ["freights"] })
+    queryAllFreightsForDre({}, 30, { revalidate: 86400, tags: ["freights"] })
       .catch(() => [] as FreightDreNode[]),
     fetchKmDaily(mes),
   ]);

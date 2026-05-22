@@ -38,7 +38,9 @@ async function request<T>(path: string, body: unknown = {}): Promise<T> {
       "Content-Type": "application/json",
     },
     body: JSON.stringify(body),
-    next: { revalidate: 300 },
+    // Elithium tem janela de dados curta (~1h30); cache 1h é suficiente
+    // e ainda evita gastar cota. Botão "Atualizar" invalida via tag.
+    next: { revalidate: 3600, tags: ["elithium"] },
   });
 
   if (!res.ok) {

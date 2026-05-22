@@ -8,7 +8,7 @@ export default async function MotoristaPage() {
   let freights: FreightManifestNode[] = [];
 
   try {
-    const cacheOpts = { revalidate: 300, tags: ["freights"] };
+    const cacheOpts = { revalidate: 86400, tags: ["freights"] };
     [drivers, freights] = await Promise.all([
       queryAllDrivers(20, cacheOpts).catch(() => []),
       queryAllFreightsWithManifest(50, cacheOpts).catch(() => []),
