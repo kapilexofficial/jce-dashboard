@@ -12,14 +12,12 @@ import {
 interface ClientData {
   name: string;
   revenue: number;
-  margin: number;
   count: number;
   weight: number;
 }
 
 const chartConfig = {
   revenue: { label: "Receita", color: "var(--chart-1)" },
-  margin: { label: "Margem", color: "var(--chart-2)" },
 } satisfies ChartConfig;
 
 export function TopClientsChart({ clients }: { clients: ClientData[] }) {
@@ -27,7 +25,6 @@ export function TopClientsChart({ clients }: { clients: ClientData[] }) {
     name: c.name.length > 18 ? c.name.slice(0, 18) + "..." : c.name,
     fullName: c.name,
     revenue: c.revenue,
-    margin: c.margin,
     count: c.count,
   }));
 
@@ -71,15 +68,13 @@ export function TopClientsChart({ clients }: { clients: ClientData[] }) {
             <ChartTooltip
               content={
                 <ChartTooltipContent
-                  formatter={(value, name) => {
-                    const num = Number(value);
-                    return `R$ ${num.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}`;
-                  }}
+                  formatter={(value) =>
+                    `R$ ${Number(value).toLocaleString("pt-BR", { minimumFractionDigits: 2 })}`
+                  }
                 />
               }
             />
-            <Bar dataKey="revenue" fill="var(--color-revenue)" radius={[0, 4, 4, 0]} barSize={14} />
-            <Bar dataKey="margin" fill="var(--color-margin)" radius={[0, 4, 4, 0]} barSize={14} />
+            <Bar dataKey="revenue" fill="var(--color-revenue)" radius={[0, 4, 4, 0]} barSize={18} />
           </BarChart>
         </ChartContainer>
       </CardContent>

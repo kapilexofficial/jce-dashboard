@@ -82,12 +82,11 @@ export function DashboardClient({ freights: allFreights, occurrences: allOccurre
   freights.forEach((f) => { statusCounts[f.status] = (statusCounts[f.status] || 0) + 1; });
 
   const topClients = useMemo(() => {
-    const map: Record<string, { revenue: number; margin: number; count: number; weight: number }> = {};
+    const map: Record<string, { revenue: number; count: number; weight: number }> = {};
     margins.forEach((m) => {
       const name = m.sender.name;
-      if (!map[name]) map[name] = { revenue: 0, margin: 0, count: 0, weight: 0 };
+      if (!map[name]) map[name] = { revenue: 0, count: 0, weight: 0 };
       map[name].revenue += parseFloat(m.freight_total);
-      map[name].margin += parseFloat(m.margin_total);
       map[name].count += 1;
       map[name].weight += parseFloat(m.real_weight);
     });

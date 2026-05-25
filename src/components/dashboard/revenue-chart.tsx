@@ -18,17 +18,16 @@ interface Props {
 
 const chartConfig = {
   receita: { label: "Receita", color: "var(--chart-1)" },
-  margem: { label: "Margem", color: "var(--chart-2)" },
+  despesas: { label: "Despesas", color: "oklch(0.75 0.15 70)" },
 } satisfies ChartConfig;
 
 export function RevenueChart({ margins }: Props) {
-  const byMonth: Record<string, { receita: number; margem: number; despesas: number }> = {};
+  const byMonth: Record<string, { receita: number; despesas: number }> = {};
   margins.forEach((m) => {
     const date = new Date(m.service_at);
     const key = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}`;
-    if (!byMonth[key]) byMonth[key] = { receita: 0, margem: 0, despesas: 0 };
+    if (!byMonth[key]) byMonth[key] = { receita: 0, despesas: 0 };
     byMonth[key].receita += parseFloat(m.freight_total);
-    byMonth[key].margem += parseFloat(m.margin_total);
     byMonth[key].despesas += parseFloat(m.total_expenses);
   });
 
@@ -43,15 +42,15 @@ export function RevenueChart({ margins }: Props) {
     .map(([key, values]) => ({
       month: `${monthNames[key.split("-")[1]]}/${key.slice(2, 4)}`,
       receita: values.receita,
-      margem: values.margem,
+      despesas: values.despesas,
     }));
 
   if (data.length === 0) {
     return (
       <Card className="h-full">
         <CardHeader>
-          <CardTitle>Receita vs Margem</CardTitle>
-          <CardDescription>Sem dados de margem disponiveis</CardDescription>
+          <CardTitle>Receita vs Despesas</CardTitle>
+          <CardDescription>Sem dados disponíveis</CardDescription>
         </CardHeader>
       </Card>
     );
@@ -60,8 +59,8 @@ export function RevenueChart({ margins }: Props) {
   return (
     <Card className="h-full">
       <CardHeader>
-        <CardTitle>Receita vs Margem</CardTitle>
-        <CardDescription>Evolucao mensal</CardDescription>
+        <CardTitle>Receita vs Despesas</CardTitle>
+        <CardDescription>Evolução mensal</CardDescription>
       </CardHeader>
       <CardContent>
         <ChartContainer config={chartConfig} className="h-[300px] w-full">
@@ -71,9 +70,9 @@ export function RevenueChart({ margins }: Props) {
                 <stop offset="0%" stopColor="var(--color-receita)" stopOpacity={0.25} />
                 <stop offset="100%" stopColor="var(--color-receita)" stopOpacity={0.02} />
               </linearGradient>
-              <linearGradient id="gradMargem" x1="0" y1="0" x2="0" y2="1">
-                <stop offset="0%" stopColor="var(--color-margem)" stopOpacity={0.25} />
-                <stop offset="100%" stopColor="var(--color-margem)" stopOpacity={0.02} />
+              <linearGradient id="gradDespesas" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="0%" stopColor="var(--color-despesas)" stopOpacity={0.25} />
+                <stop offset="100%" stopColor="var(--color-despesas)" stopOpacity={0.02} />
               </linearGradient>
             </defs>
             <CartesianGrid vertical={false} strokeDasharray="3 3" />
@@ -103,9 +102,9 @@ export function RevenueChart({ margins }: Props) {
               type="monotone"
             />
             <Area
-              dataKey="margem"
-              fill="url(#gradMargem)"
-              stroke="var(--color-margem)"
+              dataKey="despesas"
+              fill="url(#gradDespesas)"
+              stroke="var(--color-despesas)"
               strokeWidth={2.5}
               type="monotone"
             />
