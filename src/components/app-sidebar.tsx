@@ -6,8 +6,6 @@ import {
   MapPin,
   Truck,
   DollarSign,
-  AlertTriangle,
-  Package,
   BarChart3,
   Users,
   Receipt,
@@ -46,8 +44,6 @@ const navItems = [
     items: [
       { title: "Fretes", href: "/fretes", icon: Truck },
       { title: "Tracking", href: "/tracking", icon: MapPin },
-      { title: "Ocorrencias", href: "/ocorrencias", icon: AlertTriangle },
-      { title: "Coletas", href: "/coletas", icon: Package },
     ],
   },
   {
