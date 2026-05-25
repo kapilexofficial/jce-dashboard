@@ -13,6 +13,7 @@ import {
   Gauge,
   Activity,
 } from "lucide-react";
+import Image from "next/image";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
@@ -76,17 +77,21 @@ export function AppSidebar() {
   return (
     <Sidebar>
       <SidebarHeader className="px-5 py-5">
-        <div className="flex items-center gap-3">
-          <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary/15 ring-1 ring-primary/30">
-            <Truck className="h-5 w-5 text-primary" />
+        <Link href="/" className="flex flex-col items-center gap-2 transition hover:opacity-90">
+          <div className="rounded-lg bg-white/95 px-3 py-2 ring-1 ring-white/10">
+            <Image
+              src="/logo-jce.png"
+              alt="JCE Transportes"
+              width={180}
+              height={72}
+              priority
+              className="h-auto w-[160px] object-contain"
+            />
           </div>
-          <div>
-            <span className="text-sm font-bold tracking-tight text-sidebar-foreground">JCE Trans</span>
-            <p className="text-[10px] text-sidebar-foreground/40 font-medium tracking-wide uppercase mt-0.5">
-              Gestao Logistica
-            </p>
-          </div>
-        </div>
+          <span className="text-[10px] text-sidebar-foreground/40 font-medium tracking-[0.18em] uppercase">
+            Gestão Logística
+          </span>
+        </Link>
       </SidebarHeader>
       <Separator className="!bg-sidebar-border" />
       <SidebarContent className="px-3 pt-3">
