@@ -19,6 +19,7 @@ import { RevenueChart } from "@/components/dashboard/revenue-chart";
 import { FreightStatusChart } from "@/components/dashboard/freight-status-chart";
 import { TopClientsChart } from "@/components/dashboard/top-clients-chart";
 import { RegionChart } from "@/components/dashboard/region-chart";
+import { KpiDetailSheet, type KpiKind } from "@/components/dashboard/kpi-detail-sheet";
 import type { FreightMargin, FreightNode, OccurrenceRest } from "@/lib/esl-api";
 
 function fmt(value: number) {
@@ -54,6 +55,7 @@ export function DashboardClient({ freights: allFreights, occurrences: allOccurre
   }, [allMargins, allFreights, allOccurrences]);
 
   const [selectedMonth, setSelectedMonth] = useState("all");
+  const [detailKind, setDetailKind] = useState<KpiKind | null>(null);
 
   const monthLabel = useMemo(() => {
     if (selectedMonth === "all") return "";
@@ -136,44 +138,70 @@ export function DashboardClient({ freights: allFreights, occurrences: allOccurre
       </div>
 
       {/* KPI Cards */}
-      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-5">
-        <Card className="border-l-4 border-l-primary">
-          <CardHeader className="flex flex-row items-center justify-between pb-1">
-            <CardTitle className="text-sm font-bold uppercase tracking-wide text-primary">Fretes</CardTitle>
-            <Truck className="h-5 w-5 text-primary/60" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-4xl font-extrabold">{freights.length}</div>
-            <p className="text-xs text-muted-foreground mt-1">{margins.length} com margem calculada</p>
-          </CardContent>
-        </Card>
+      <div className="grid gap-4 md:grid-cols-3">
+        <button
+          type="button"
+          onClick={() => setDetailKind("fretes")}
+          className="text-left transition hover:scale-[1.01] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring rounded-xl"
+        >
+          <Card className="border-l-4 border-l-primary cursor-pointer hover:bg-muted/30 transition-colors h-full">
+            <CardHeader className="flex flex-row items-center justify-between pb-1">
+              <CardTitle className="text-sm font-bold uppercase tracking-wide text-primary">Fretes</CardTitle>
+              <Truck className="h-5 w-5 text-primary/60" />
+            </CardHeader>
+            <CardContent>
+              <div className="text-4xl font-extrabold">{freights.length}</div>
+              <p className="text-xs text-muted-foreground mt-1">{margins.length} com margem · clique para detalhar</p>
+            </CardContent>
+          </Card>
+        </button>
 
-        <Card className="border-l-4 border-l-emerald-500">
-          <CardHeader className="flex flex-row items-center justify-between pb-1">
-            <CardTitle className="text-sm font-bold uppercase tracking-wide text-emerald-400">Receita</CardTitle>
-            <DollarSign className="h-5 w-5 text-emerald-500/60" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-4xl font-extrabold text-emerald-400">{fmt(totalRevenue)}</div>
-            <div className="flex items-center gap-1 mt-1">
-              <ArrowUpRight className="h-3 w-3 text-emerald-500" />
-              <span className="text-xs text-emerald-500 font-medium">{fmtFull(totalRevenue)}</span>
-            </div>
-          </CardContent>
-        </Card>
+        <button
+          type="button"
+          onClick={() => setDetailKind("receita")}
+          className="text-left transition hover:scale-[1.01] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring rounded-xl"
+        >
+          <Card className="border-l-4 border-l-emerald-500 cursor-pointer hover:bg-muted/30 transition-colors h-full">
+            <CardHeader className="flex flex-row items-center justify-between pb-1">
+              <CardTitle className="text-sm font-bold uppercase tracking-wide text-emerald-400">Receita</CardTitle>
+              <DollarSign className="h-5 w-5 text-emerald-500/60" />
+            </CardHeader>
+            <CardContent>
+              <div className="text-4xl font-extrabold text-emerald-400">{fmt(totalRevenue)}</div>
+              <div className="flex items-center gap-1 mt-1">
+                <ArrowUpRight className="h-3 w-3 text-emerald-500" />
+                <span className="text-xs text-emerald-500 font-medium">{fmtFull(totalRevenue)}</span>
+              </div>
+            </CardContent>
+          </Card>
+        </button>
 
-        <Card className="border-l-4 border-l-amber-500">
-          <CardHeader className="flex flex-row items-center justify-between pb-1">
-            <CardTitle className="text-sm font-bold uppercase tracking-wide text-amber-400">Despesas</CardTitle>
-            <ArrowDownRight className="h-5 w-5 text-amber-500/60" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-4xl font-extrabold text-amber-400">{fmt(totalExpenses)}</div>
-            <p className="text-xs text-muted-foreground mt-1">impostos + custos</p>
-          </CardContent>
-        </Card>
-
+        <button
+          type="button"
+          onClick={() => setDetailKind("despesas")}
+          className="text-left transition hover:scale-[1.01] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring rounded-xl"
+        >
+          <Card className="border-l-4 border-l-amber-500 cursor-pointer hover:bg-muted/30 transition-colors h-full">
+            <CardHeader className="flex flex-row items-center justify-between pb-1">
+              <CardTitle className="text-sm font-bold uppercase tracking-wide text-amber-400">Despesas</CardTitle>
+              <ArrowDownRight className="h-5 w-5 text-amber-500/60" />
+            </CardHeader>
+            <CardContent>
+              <div className="text-4xl font-extrabold text-amber-400">{fmt(totalExpenses)}</div>
+              <p className="text-xs text-muted-foreground mt-1">impostos + custos · clique para detalhar</p>
+            </CardContent>
+          </Card>
+        </button>
       </div>
+
+      <KpiDetailSheet
+        open={detailKind !== null}
+        onOpenChange={(o) => { if (!o) setDetailKind(null); }}
+        kind={detailKind}
+        freights={freights}
+        margins={margins}
+        monthLabel={monthLabel || undefined}
+      />
 
       {/* Charts */}
       <div className="grid gap-6 md:grid-cols-7">
