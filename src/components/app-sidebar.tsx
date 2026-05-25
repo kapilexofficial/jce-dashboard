@@ -5,7 +5,6 @@ import {
   FileBarChart,
   MapPin,
   Truck,
-  DollarSign,
   BarChart3,
   Users,
   Receipt,
@@ -66,7 +65,6 @@ const navItems = [
     group: "Gestao",
     items: [
       { title: "Fechamento Mensal", href: "/fechamento", icon: FileBarChart },
-      { title: "Financeiro", href: "/financeiro", icon: DollarSign },
       { title: "Relatorios", href: "/relatorios", icon: FileBarChart },
     ],
   },
