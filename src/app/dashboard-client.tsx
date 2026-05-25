@@ -205,7 +205,7 @@ export function DashboardClient({ freights: allFreights, occurrences: allOccurre
       {/* Charts */}
       <div className="grid gap-6 md:grid-cols-7">
         <div className="md:col-span-4">
-          <RevenueChart margins={selectedMonth === "all" ? allMargins : margins} />
+          <RevenueChart margins={allMargins} selectedMonth={selectedMonth} />
         </div>
         <div className="md:col-span-3">
           <FreightStatusChart statusCounts={statusCounts} />
